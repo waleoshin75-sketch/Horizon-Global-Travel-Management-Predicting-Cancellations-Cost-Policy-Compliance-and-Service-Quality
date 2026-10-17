@@ -1393,7 +1393,7 @@ Two sets of charts: one for the five business objectives, one for the machine le
 
 ### Business objective charts
 
-![Five business objective charts](business_objective_charts.png)
+<img width="3979" height="2178" alt="business_objective_charts" src="https://github.com/user-attachments/assets/9efd52c0-f7db-4db8-b670-efc806a48b1d" />
 
 | # | Chart | What it shows | What it means |
 |---|---|---|---|
@@ -1478,7 +1478,7 @@ for name, col in [("Service types", bk["service_type"]), ("Client tiers", bk["cl
 
 ### Machine learning charts
 
-![Five machine learning objective charts](ml_all_objectives_validation_charts.png)
+<img width="3580" height="2180" alt="ml_all_objectives_validation_charts" src="https://github.com/user-attachments/assets/84e32985-a78d-44ce-927b-112050708df2" />
 
 The five panels, read in order:
 
