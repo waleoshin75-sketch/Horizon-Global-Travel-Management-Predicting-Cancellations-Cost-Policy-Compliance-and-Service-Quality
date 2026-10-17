@@ -1393,7 +1393,7 @@ Two sets of charts: one for the five business objectives, one for the machine le
 
 ### Business objective charts
 
-<!-- Drag business_objective_charts.png here while editing this file on GitHub; GitHub will insert the image link. Alt text: Five business objective charts -->
+![Five business objective charts](business_objective_charts.png)
 
 | # | Chart | What it shows | What it means |
 |---|---|---|---|
@@ -1478,7 +1478,7 @@ for name, col in [("Service types", bk["service_type"]), ("Client tiers", bk["cl
 
 ### Machine learning charts
 
-<!-- Drag ml_all_objectives_validation_charts.png here while editing this file on GitHub; GitHub will insert the image link. Alt text: Five machine learning objective charts -->
+![Five machine learning objective charts](ml_all_objectives_validation_charts.png)
 
 The five panels, read in order:
 
