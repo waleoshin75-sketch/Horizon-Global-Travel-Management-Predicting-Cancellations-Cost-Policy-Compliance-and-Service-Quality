@@ -875,6 +875,8 @@ Complaints escalate most (about 47%) and score lowest on satisfaction (2.39 / 5)
 | `bookings_full` | 5,528 × 64 |
 | `tickets_full` | 2,263 × 52 |
 
+<img width="3968" height="2180" alt="eda_charts" src="https://github.com/user-attachments/assets/2583aa3f-0297-4fd2-a09e-b3ef0fc792b9" />
+
 ---
 
 ## 9. Machine Learning
