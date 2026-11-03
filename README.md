@@ -898,7 +898,7 @@ print("Relationship table saved to:", RELATIONSHIP_DIR.resolve())
 
 Only the 2,430 tickets with a valid CSAT score are compared. **27.6% of them ended dissatisfied.**
 
-<p align="center"><img src="images/travel_eda_01_ticket_outcomes.png" alt="Ticket outcomes and dissatisfaction by category, priority and channel" width="100%"></p>
+<img width="1802" height="1287" alt="travel_eda_01_ticket_outcomes" src="https://github.com/user-attachments/assets/9c49060b-56c8-42c1-b94e-b5d75f50c4ef" />
 <p align="center"><sub><em>Dissatisfaction by ticket category, priority and contact channel</em></sub></p>
 
 - **Complaints are the problem.** 56.2% of complaint tickets end dissatisfied, against 21% to 30% for every other category.
@@ -907,7 +907,7 @@ Only the 2,430 tickets with a valid CSAT score are compared. **27.6% of them end
 - **Priority is not protective.** Low and medium priority tickets are dissatisfied about 32% to 33% of the time, high and critical about 17%.
 - **No seasonal pattern.** Months with 30 or more tickets range from 19% to 36% with no trend.
 
-<p align="center"><img src="images/travel_eda_02_monthly_dissatisfaction.png" alt="Monthly dissatisfaction rate" width="100%"></p>
+<img width="1547" height="507" alt="travel_eda_02_monthly_dissatisfaction" src="https://github.com/user-attachments/assets/1f733742-9f72-42a1-bd8a-782a18384024" />
 <p align="center"><sub><em>Monthly dissatisfaction rate, labelled tickets only. The two extreme points at the far right are months with a single ticket each</em></sub></p>
 
 These are associations, not causes. A complaint is not unhappy because it is a complaint; it arrives unhappy.
@@ -3588,31 +3588,31 @@ Before reading model scores, here is where each problem sits in the business. Th
 
 ### Objective 1: Reduce booking cancellations
 
-<p align="center"><img src="images/travel_business_01_cancellations.png" alt="Cancellation rate by channel and service" width="100%"></p>
+<img width="1677" height="643" alt="travel_business_01_cancellations" src="https://github.com/user-attachments/assets/9857d777-e543-41ed-87a8-6cad2a3f0e07" />
 
 **17.6%** of completed or cancelled bookings cancel. Travel-agent bookings cancel most (21.3%) and mobile-app bookings least (14.0%). Car rentals (20.2%) and flights (19.4%) cancel more than hotels (14.3%).
 
 ### Objective 2: Forecast trip cost
 
-<p align="center"><img src="images/travel_business_02_trip_cost.png" alt="Spend and median amount by service" width="100%"></p>
+<img width="1677" height="643" alt="travel_business_02_trip_cost" src="https://github.com/user-attachments/assets/a0ba44ad-3566-409d-8c5f-fe5ca4072a64" />
 
 Flights carry **$5.05M** of the spend and have a median booking of $1,107. Hotels follow with $2.60M and car rentals are small at $0.20M. Cost accuracy matters most on flights.
 
 ### Objective 3: Improve policy compliance
 
-<p align="center"><img src="images/travel_business_03_policy_compliance.png" alt="Out-of-policy rate by channel and class" width="100%"></p>
+<img width="1677" height="643" alt="travel_business_03_policy_compliance" src="https://github.com/user-attachments/assets/4845f587-4776-4760-8b88-6ab2a74d58fe" />
 
 **26.2%** of bookings are out of policy. Phone (34.3%) and travel-agent (31.4%) bookings break policy far more than the online tool (20.6%). Premium cabins and rooms stand out: first class 43.7%, suites 41.0%, business 39.0%, against 18.8% for standard rooms.
 
 ### Objective 4: Raise customer satisfaction
 
-<p align="center"><img src="images/travel_business_04_customer_satisfaction.png" alt="Dissatisfaction by category and channel" width="100%"></p>
+<img width="1807" height="643" alt="travel_business_04_customer_satisfaction" src="https://github.com/user-attachments/assets/5ee43a0b-6f86-43ee-8af8-6e230f9188bd" />
 
 Complaints (56.2%) and billing disputes (29.6%) sit above the 27.6% average. Chat is the only channel well below it (9.4%).
 
 ### Objective 5: Detect booking amount anomalies
 
-<p align="center"><img src="images/travel_business_05_anomalies.png" alt="Anomaly rate by service and median amount" width="100%"></p>
+<img width="1676" height="643" alt="travel_business_05_anomalies" src="https://github.com/user-attachments/assets/841a5676-b497-4db0-8ba9-29e499ca9931" />
 
 138 of 6,000 bookings (2.3%) are planted anomalies, spread evenly across services. Their median amount is **$4,688** against $929 for normal bookings, so an amount far from its peers is the signal to look for.
 
