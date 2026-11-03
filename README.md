@@ -4159,8 +4159,6 @@ The saved files power [`app.py`](app.py). It has a Home page and one page for ea
 - **Derived inputs** such as advance days, trip length, peak season and destination region are worked out by the app from the dates and cities.
 - Model features were checked against the notebook on the test rows, and the results matched.
 
-**Run it yourself**
-
 ```bash
 pip install streamlit pandas numpy scikit-learn joblib
 python -m streamlit run app.py
@@ -4173,25 +4171,12 @@ Live app: [Open the Streamlit app](YOUR-STREAMLIT-LINK)
 ### Full code: app.py
 
 ```python
-# =============================================================================
-# TRAVEL BUSINESS OPERATIONS PREDICTION SYSTEM  (Horizon Global Travel Management)
-# A Streamlit app that uses the five saved models from the notebook.
-#
 #   Page                      Business problem                        Model
 #   Booking Cancellations     Which bookings are likely to cancel?    Logistic Regression
 #   Trip Cost Forecast        What will this trip cost?               Hist Gradient Boosting
 #   Policy Compliance         Is this booking likely out of policy?   Logistic Regression
 #   Customer Satisfaction     Will this ticket end dissatisfied?      Logistic Regression
 #   Booking Amount Anomalies  Is this booking amount unusual?         Isolation Forest
-#
-# HOW TO RUN (VS Code terminal, inside the project folder):
-#   pip install streamlit pandas numpy scikit-learn joblib
-#   python -m streamlit run app.py
-#
-# FOLDER LAYOUT (the app finds the model files by itself):
-#   app.py
-#   models/business_objectives/01_booking_cancellations/model.joblib   (and the other 4 folders)
-# =============================================================================
 
 import itertools
 import re
@@ -4209,9 +4194,9 @@ APP_SUBTITLE = "Horizon Global Travel Management"
 st.set_page_config(page_title=APP_TITLE, page_icon="✈️", layout="wide")
 
 
-# -----------------------------------------------------------------------------
+
 # 1. SETTINGS YOU MAY WANT TO CHANGE
-# -----------------------------------------------------------------------------
+
 # Risk tiers: below the first number = Low, between = Medium, above the second = High.
 # The numbers come from checking each model on its held-out test rows.
 TIER_CUTS = (0.40, 0.60)
@@ -4247,9 +4232,9 @@ CITY_CHOICES = ["Lagos", "London", "New York", "Dubai", "Frankfurt", "Johannesbu
 YES_NO = ["Yes", "No"]
 
 
-# -----------------------------------------------------------------------------
+
 # 2. FINDING AND LOADING THE SAVED MODELS
-# -----------------------------------------------------------------------------
+
 ROOT = Path(__file__).resolve().parent
 
 
@@ -4270,9 +4255,9 @@ def load_bundle(folder):
     return joblib.load(MODEL_DIR / folder / "model.joblib")
 
 
-# -----------------------------------------------------------------------------
+
 # 3. SMALL HELPERS
-# -----------------------------------------------------------------------------
+
 SYNONYMS = {"y": "yes", "true": "yes", "1": "yes", "n": "no", "false": "no", "0": "no"}
 
 
@@ -4399,9 +4384,9 @@ def main_factors(pipeline, features, top=3):
     return up, down
 
 
-# -----------------------------------------------------------------------------
+
 # 4. PAGE 1 - BOOKING CANCELLATIONS
-# -----------------------------------------------------------------------------
+
 def form_cancellations(bundle):
     c1, c2 = st.columns(2)
     booking_date = c1.date_input("Booking date", pd.Timestamp.today(), key="c_bd")
@@ -4434,9 +4419,9 @@ def features_cancellations(raw, bundle):
     })
 
 
-# -----------------------------------------------------------------------------
+
 # 5. PAGE 2 - TRIP COST FORECAST
-# -----------------------------------------------------------------------------
+
 def form_cost(bundle):
     c1, c2 = st.columns(2)
     service = c1.selectbox("Service type", list(CLASS_BY_SERVICE), key="k_sv")
@@ -4483,9 +4468,9 @@ def features_cost(raw, bundle):
     })
 
 
-# -----------------------------------------------------------------------------
+
 # 6. PAGE 3 - POLICY COMPLIANCE
-# -----------------------------------------------------------------------------
+
 def form_policy(bundle):
     c1, c2 = st.columns(2)
     service = c1.selectbox("Service type", list(CLASS_BY_SERVICE), key="p_sv")
@@ -4516,9 +4501,9 @@ def features_policy(raw, bundle):
     })
 
 
-# -----------------------------------------------------------------------------
+
 # 7. PAGE 4 - CUSTOMER SATISFACTION
-# -----------------------------------------------------------------------------
+
 def form_satisfaction(bundle):
     c1, c2 = st.columns(2)
     category = c1.selectbox("Ticket category", options_for(bundle, "category"), key="s_ca")
@@ -4544,9 +4529,9 @@ def features_satisfaction(raw, bundle):
     })
 
 
-# -----------------------------------------------------------------------------
+
 # 8. PAGE 5 - BOOKING AMOUNT ANOMALIES
-# -----------------------------------------------------------------------------
+
 def form_anomaly(bundle):
     c1, c2 = st.columns(2)
     service = c1.selectbox("Service type", list(CLASS_BY_SERVICE), key="a_sv")
@@ -4594,9 +4579,9 @@ def features_anomaly(raw, bundle):
     return features
 
 
-# -----------------------------------------------------------------------------
+
 # 9. PAGE SETTINGS: ONE ENTRY PER PAGE
-# -----------------------------------------------------------------------------
+
 PAGES = {
     "Booking Cancellations": {
         "folder": "01_booking_cancellations", "kind": "risk",
@@ -4674,9 +4659,9 @@ PAGES = {
 }
 
 
-# -----------------------------------------------------------------------------
+
 # 10. SCORING: TURN RAW INPUTS INTO A RESULTS TABLE
-# -----------------------------------------------------------------------------
+
 def score(cfg, raw, bundle):
     raw = raw.reset_index(drop=True)
     features = cfg["features"](raw, bundle)
@@ -4712,9 +4697,9 @@ def show_tier(tier, text):
     box(f"**{tier}**  -  {text}")
 
 
-# -----------------------------------------------------------------------------
+
 # 11. SHOWING A PAGE
-# -----------------------------------------------------------------------------
+
 def show_single_result(name, cfg, results, features, bundle):
     row = results.iloc[0]
     if cfg["kind"] == "risk":
@@ -4779,9 +4764,9 @@ def show_page(name):
         show_batch(name, cfg, bundle)
 
 
-# -----------------------------------------------------------------------------
+
 # 12. HOME PAGE
-# -----------------------------------------------------------------------------
+
 def show_home():
     st.title(APP_TITLE)
     st.subheader(APP_SUBTITLE)
@@ -4808,9 +4793,9 @@ def show_home():
     st.caption(f"Model files loaded from: {MODEL_DIR}")
 
 
-# -----------------------------------------------------------------------------
+
 # 13. MAIN: SIDEBAR MENU
-# -----------------------------------------------------------------------------
+
 if MODEL_DIR is None:
     st.error("Model files not found. Put the 'models' folder (with business_objectives inside) "
              "in the same folder as app.py.")
