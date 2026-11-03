@@ -1,0 +1,53 @@
+{
+  "feature_spec": {
+    "objective": "Reduce booking cancellations",
+    "selected_model": "Logistic Regression",
+    "target": "cancelled (1 if booking_status is Cancelled/Canceled, else 0)",
+    "model_features": [
+      "advance_days",
+      "advance_days_missing",
+      "service_rating",
+      "cancellation_flexibility",
+      "service_type",
+      "client_tier",
+      "booking_channel",
+      "policy_compliant"
+    ],
+    "numeric_features": [
+      "advance_days",
+      "advance_days_missing",
+      "service_rating"
+    ],
+    "categorical_features": [
+      "cancellation_flexibility",
+      "service_type",
+      "client_tier",
+      "booking_channel",
+      "policy_compliant"
+    ],
+    "required_source_columns": [
+      "booking_date",
+      "travel_date",
+      "booking_status",
+      "supplier_id",
+      "service_type",
+      "client_id",
+      "booking_channel",
+      "policy_compliant"
+    ],
+    "required_lookups": {
+      "supplier_id": [
+        "service_rating",
+        "cancellation_flexibility"
+      ],
+      "client_id": [
+        "client_tier"
+      ]
+    },
+    "derived_features": {
+      "advance_days": "Parsed travel_date minus booking_date; negative or invalid values become missing.",
+      "advance_days_missing": "1 when advance_days is missing, else 0."
+    },
+    "selection_metric": "Highest held-out average precision among evaluated candidate models (0.253)."
+  }
+}

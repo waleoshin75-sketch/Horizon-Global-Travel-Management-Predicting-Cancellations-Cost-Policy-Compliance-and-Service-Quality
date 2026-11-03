@@ -1,0 +1,50 @@
+{
+  "feature_spec": {
+    "objective": "Raise customer satisfaction",
+    "selected_model": "Logistic Regression",
+    "target": "dissatisfied (1 if valid csat_score <= 2, else 0)",
+    "model_features": [
+      "resolution_hours",
+      "first_response_hours",
+      "escalated",
+      "category",
+      "contact_channel",
+      "client_tier"
+    ],
+    "numeric_features": [
+      "resolution_hours",
+      "first_response_hours"
+    ],
+    "categorical_features": [
+      "escalated",
+      "category",
+      "contact_channel",
+      "client_tier"
+    ],
+    "required_source_columns": [
+      "resolution_hours",
+      "first_response_hours",
+      "escalated",
+      "category",
+      "contact_channel",
+      "ticket_id",
+      "booking_id",
+      "client_id",
+      "csat_score"
+    ],
+    "required_lookups": {
+      "booking_id": [
+        "client_id"
+      ],
+      "client_id": [
+        "client_tier"
+      ]
+    },
+    "derived_features": {
+      "client_id": "Use ticket client_id when present, otherwise fill from its booking.",
+      "client_tier": "Joined from the client dimension using resolved client_id.",
+      "dissatisfied": "1 for valid CSAT scores 1 or 2; 0 for scores 3 through 5."
+    },
+    "selection_metric": "Highest held-out average precision (0.893); balanced accuracy 0.866, F1 0.786."
+  }
+}

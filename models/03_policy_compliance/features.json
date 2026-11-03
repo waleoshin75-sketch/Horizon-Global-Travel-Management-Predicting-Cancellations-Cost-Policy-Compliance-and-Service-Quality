@@ -1,0 +1,56 @@
+{
+  "feature_spec": {
+    "objective": "Improve travel policy compliance",
+    "selected_model": "Logistic Regression",
+    "target": "out_of_policy (1 if policy_compliant is No, else 0)",
+    "model_features": [
+      "travel_class",
+      "traveler_grade",
+      "preferred_partner",
+      "advance_days",
+      "advance_days_missing",
+      "booking_channel",
+      "has_travel_policy"
+    ],
+    "numeric_features": [
+      "advance_days",
+      "advance_days_missing"
+    ],
+    "categorical_features": [
+      "travel_class",
+      "traveler_grade",
+      "preferred_partner",
+      "booking_channel",
+      "has_travel_policy"
+    ],
+    "required_source_columns": [
+      "travel_class",
+      "booking_date",
+      "travel_date",
+      "booking_channel",
+      "policy_compliant",
+      "traveler_id",
+      "supplier_id",
+      "client_id"
+    ],
+    "required_lookups": {
+      "traveler_id": [
+        "grade"
+      ],
+      "supplier_id": [
+        "preferred_partner"
+      ],
+      "client_id": [
+        "has_travel_policy"
+      ]
+    },
+    "derived_features": {
+      "advance_days": "Parsed travel_date minus booking_date; negative or invalid values become missing.",
+      "advance_days_missing": "1 when advance_days is missing, else 0.",
+      "traveler_grade": "Joined from the traveler dimension using traveler_id.",
+      "preferred_partner": "Joined from the supplier dimension using supplier_id.",
+      "has_travel_policy": "Joined from the client dimension using client_id."
+    },
+    "selection_metric": "Highest held-out average precision (0.452); balanced accuracy 0.646, F1 0.488."
+  }
+}

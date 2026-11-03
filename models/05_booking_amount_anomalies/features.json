@@ -1,0 +1,876 @@
+{
+  "feature_spec": {
+    "objective": "Detect booking amount anomalies",
+    "selected_model": "Isolation Forest (only anomaly model evaluated)",
+    "target": "Unsupervised anomaly score; answer key is for evaluation only.",
+    "model_features": [
+      "log_amount_abs",
+      "log_amount_deviation",
+      "robust_peer_deviation",
+      "amount_nonpositive",
+      "amount_missing"
+    ],
+    "numeric_features": [
+      "log_amount_abs",
+      "log_amount_deviation",
+      "robust_peer_deviation",
+      "amount_nonpositive",
+      "amount_missing"
+    ],
+    "categorical_features": [],
+    "required_source_columns": [
+      "service_type",
+      "travel_class",
+      "destination_city",
+      "amount_usd"
+    ],
+    "derived_features": {
+      "destination_region": "Normalize destination city and map through the notebook city-region map.",
+      "peer_reference": "Training-only medians and MADs by service_type, travel_class, and destination_region; unseen or groups with fewer than 20 rows fall back to global training references.",
+      "model_features": [
+        "log_amount_abs",
+        "log_amount_deviation",
+        "robust_peer_deviation",
+        "amount_nonpositive",
+        "amount_missing"
+      ]
+    },
+    "selection_metric": "Only anomaly model evaluated; held-out average precision 0.678, ROC AUC 0.947, F1 0.634."
+  },
+  "feature_reference": {
+    "city_regions": {
+      "bom": "South Asia",
+      "bombay": "South Asia",
+      "mumbai": "South Asia",
+      "dxb": "Middle East",
+      "dubai": "Middle East",
+      "fra": "Europe",
+      "frankfurt": "Europe",
+      "gru": "South America",
+      "sao paulo": "South America",
+      "jnb": "Africa",
+      "joburg": "Africa",
+      "johannesburg": "Africa",
+      "lagos": "Africa",
+      "los": "Africa",
+      "lon": "Europe",
+      "london": "Europe",
+      "nyc": "North America",
+      "new york": "North America",
+      "sin": "Southeast Asia",
+      "singapore": "Southeast Asia",
+      "syd": "Oceania",
+      "sydney": "Oceania"
+    },
+    "group_columns": [
+      "service_type",
+      "travel_class",
+      "destination_region"
+    ],
+    "group_stats_lookup": [
+      {
+        "group_values": [
+          "car rental",
+          "economy",
+          "Africa"
+        ],
+        "group_median": 5.166841003759651,
+        "group_count": 61,
+        "group_mad": 0.3738643307470353
+      },
+      {
+        "group_values": [
+          "car rental",
+          "economy",
+          "Europe"
+        ],
+        "group_median": 5.387426541619813,
+        "group_count": 77,
+        "group_mad": 0.430684409868892
+      },
+      {
+        "group_values": [
+          "car rental",
+          "economy",
+          "Middle East"
+        ],
+        "group_median": 5.272230031784718,
+        "group_count": 27,
+        "group_mad": 0.5033266538140255
+      },
+      {
+        "group_values": [
+          "car rental",
+          "economy",
+          "North America"
+        ],
+        "group_median": 5.546321436581801,
+        "group_count": 28,
+        "group_mad": 0.2755414702616905
+      },
+      {
+        "group_values": [
+          "car rental",
+          "economy",
+          "Oceania"
+        ],
+        "group_median": 5.379616191872628,
+        "group_count": 28,
+        "group_mad": 0.5647076920140077
+      },
+      {
+        "group_values": [
+          "car rental",
+          "economy",
+          "South America"
+        ],
+        "group_median": 5.696824994088702,
+        "group_count": 31,
+        "group_mad": 0.31038986311051175
+      },
+      {
+        "group_values": [
+          "car rental",
+          "economy",
+          "South Asia"
+        ],
+        "group_median": 5.1304217003035095,
+        "group_count": 20,
+        "group_mad": 0.32521501593052404
+      },
+      {
+        "group_values": [
+          "car rental",
+          "economy",
+          "Southeast Asia"
+        ],
+        "group_median": 5.304349138779756,
+        "group_count": 27,
+        "group_mad": 0.4103403047151195
+      },
+      {
+        "group_values": [
+          "car rental",
+          "luxury",
+          "Africa"
+        ],
+        "group_median": 5.936110386975904,
+        "group_count": 23,
+        "group_mad": 0.3334592695202625
+      },
+      {
+        "group_values": [
+          "car rental",
+          "luxury",
+          "Europe"
+        ],
+        "group_median": 6.103771028707775,
+        "group_count": 28,
+        "group_mad": 0.45135085508364803
+      },
+      {
+        "group_values": [
+          "car rental",
+          "luxury",
+          "Middle East"
+        ],
+        "group_median": 6.106332226127837,
+        "group_count": 11,
+        "group_mad": 0.28172485058471075
+      },
+      {
+        "group_values": [
+          "car rental",
+          "luxury",
+          "North America"
+        ],
+        "group_median": 6.305965019842053,
+        "group_count": 5,
+        "group_mad": 0.28384140055196205
+      },
+      {
+        "group_values": [
+          "car rental",
+          "luxury",
+          "Oceania"
+        ],
+        "group_median": 6.179851008464187,
+        "group_count": 7,
+        "group_mad": 0.2102742611142343
+      },
+      {
+        "group_values": [
+          "car rental",
+          "luxury",
+          "South America"
+        ],
+        "group_median": 6.381900616196386,
+        "group_count": 9,
+        "group_mad": 0.35987091419941386
+      },
+      {
+        "group_values": [
+          "car rental",
+          "luxury",
+          "South Asia"
+        ],
+        "group_median": 5.512275394334081,
+        "group_count": 14,
+        "group_mad": 0.5269791022278785
+      },
+      {
+        "group_values": [
+          "car rental",
+          "luxury",
+          "Southeast Asia"
+        ],
+        "group_median": 6.11006946714707,
+        "group_count": 11,
+        "group_mad": 0.2855092759981206
+      },
+      {
+        "group_values": [
+          "car rental",
+          "suv",
+          "Africa"
+        ],
+        "group_median": 5.410424706273832,
+        "group_count": 24,
+        "group_mad": 0.5692887132466091
+      },
+      {
+        "group_values": [
+          "car rental",
+          "suv",
+          "Europe"
+        ],
+        "group_median": 5.730878700317902,
+        "group_count": 27,
+        "group_mad": 0.4289352460171507
+      },
+      {
+        "group_values": [
+          "car rental",
+          "suv",
+          "Middle East"
+        ],
+        "group_median": 6.029369258816887,
+        "group_count": 6,
+        "group_mad": 0.1563800988195312
+      },
+      {
+        "group_values": [
+          "car rental",
+          "suv",
+          "North America"
+        ],
+        "group_median": 5.784255858806078,
+        "group_count": 9,
+        "group_mad": 0.195547591995342
+      },
+      {
+        "group_values": [
+          "car rental",
+          "suv",
+          "Oceania"
+        ],
+        "group_median": 6.053285675530868,
+        "group_count": 10,
+        "group_mad": 0.3717798940902446
+      },
+      {
+        "group_values": [
+          "car rental",
+          "suv",
+          "South America"
+        ],
+        "group_median": 5.786651952478496,
+        "group_count": 13,
+        "group_mad": 0.3508360727448254
+      },
+      {
+        "group_values": [
+          "car rental",
+          "suv",
+          "South Asia"
+        ],
+        "group_median": 5.394850949242706,
+        "group_count": 12,
+        "group_mad": 0.48788076297303906
+      },
+      {
+        "group_values": [
+          "car rental",
+          "suv",
+          "Southeast Asia"
+        ],
+        "group_median": 5.3893456648956,
+        "group_count": 9,
+        "group_mad": 0.33502344336898915
+      },
+      {
+        "group_values": [
+          "flight",
+          "business",
+          "Africa"
+        ],
+        "group_median": 7.845128555274865,
+        "group_count": 78,
+        "group_mad": 0.18181573424063568
+      },
+      {
+        "group_values": [
+          "flight",
+          "business",
+          "Europe"
+        ],
+        "group_median": 7.89926108423295,
+        "group_count": 93,
+        "group_mad": 0.17327804541750336
+      },
+      {
+        "group_values": [
+          "flight",
+          "business",
+          "Middle East"
+        ],
+        "group_median": 7.9316747416521,
+        "group_count": 40,
+        "group_mad": 0.15011392684886715
+      },
+      {
+        "group_values": [
+          "flight",
+          "business",
+          "North America"
+        ],
+        "group_median": 7.990817850861748,
+        "group_count": 44,
+        "group_mad": 0.17226212165045984
+      },
+      {
+        "group_values": [
+          "flight",
+          "business",
+          "Oceania"
+        ],
+        "group_median": 8.021509021740085,
+        "group_count": 45,
+        "group_mad": 0.14246894827517842
+      },
+      {
+        "group_values": [
+          "flight",
+          "business",
+          "South America"
+        ],
+        "group_median": 7.991328377153531,
+        "group_count": 43,
+        "group_mad": 0.20720476557465783
+      },
+      {
+        "group_values": [
+          "flight",
+          "business",
+          "South Asia"
+        ],
+        "group_median": 7.730223124482563,
+        "group_count": 35,
+        "group_mad": 0.08789334131663384
+      },
+      {
+        "group_values": [
+          "flight",
+          "business",
+          "Southeast Asia"
+        ],
+        "group_median": 7.66982199500668,
+        "group_count": 47,
+        "group_mad": 0.13010900427706584
+      },
+      {
+        "group_values": [
+          "flight",
+          "economy",
+          "Africa"
+        ],
+        "group_median": 6.599094688145158,
+        "group_count": 275,
+        "group_mad": 0.22176193476683537
+      },
+      {
+        "group_values": [
+          "flight",
+          "economy",
+          "Europe"
+        ],
+        "group_median": 6.7866718028590745,
+        "group_count": 269,
+        "group_mad": 0.19851662801958803
+      },
+      {
+        "group_values": [
+          "flight",
+          "economy",
+          "Middle East"
+        ],
+        "group_median": 6.725003240414797,
+        "group_count": 106,
+        "group_mad": 0.1482588265634721
+      },
+      {
+        "group_values": [
+          "flight",
+          "economy",
+          "North America"
+        ],
+        "group_median": 6.872149662043542,
+        "group_count": 98,
+        "group_mad": 0.1385910423379375
+      },
+      {
+        "group_values": [
+          "flight",
+          "economy",
+          "Oceania"
+        ],
+        "group_median": 6.936809099372875,
+        "group_count": 103,
+        "group_mad": 0.13723997532602006
+      },
+      {
+        "group_values": [
+          "flight",
+          "economy",
+          "South America"
+        ],
+        "group_median": 6.8163743634719225,
+        "group_count": 134,
+        "group_mad": 0.17601757064428014
+      },
+      {
+        "group_values": [
+          "flight",
+          "economy",
+          "South Asia"
+        ],
+        "group_median": 6.577986376667083,
+        "group_count": 86,
+        "group_mad": 0.11236076176379761
+      },
+      {
+        "group_values": [
+          "flight",
+          "economy",
+          "Southeast Asia"
+        ],
+        "group_median": 6.598307803176269,
+        "group_count": 102,
+        "group_mad": 0.18741792723828654
+      },
+      {
+        "group_values": [
+          "flight",
+          "first",
+          "Africa"
+        ],
+        "group_median": 8.310107142621785,
+        "group_count": 30,
+        "group_mad": 0.1988833586860883
+      },
+      {
+        "group_values": [
+          "flight",
+          "first",
+          "Europe"
+        ],
+        "group_median": 8.444140662086733,
+        "group_count": 31,
+        "group_mad": 0.1561895804465756
+      },
+      {
+        "group_values": [
+          "flight",
+          "first",
+          "Middle East"
+        ],
+        "group_median": 8.386398621701568,
+        "group_count": 17,
+        "group_mad": 0.07814034968777683
+      },
+      {
+        "group_values": [
+          "flight",
+          "first",
+          "North America"
+        ],
+        "group_median": 8.606060668848688,
+        "group_count": 16,
+        "group_mad": 0.16629481763280207
+      },
+      {
+        "group_values": [
+          "flight",
+          "first",
+          "Oceania"
+        ],
+        "group_median": 8.677907971317818,
+        "group_count": 14,
+        "group_mad": 0.13731047969305354
+      },
+      {
+        "group_values": [
+          "flight",
+          "first",
+          "South America"
+        ],
+        "group_median": 8.504580014875593,
+        "group_count": 12,
+        "group_mad": 0.11847351083881374
+      },
+      {
+        "group_values": [
+          "flight",
+          "first",
+          "South Asia"
+        ],
+        "group_median": 8.265539562756244,
+        "group_count": 13,
+        "group_mad": 0.07726719180838515
+      },
+      {
+        "group_values": [
+          "flight",
+          "first",
+          "Southeast Asia"
+        ],
+        "group_median": 8.274795462379881,
+        "group_count": 13,
+        "group_mad": 0.14950772807406132
+      },
+      {
+        "group_values": [
+          "flight",
+          "premium economy",
+          "Africa"
+        ],
+        "group_median": 7.054172451567142,
+        "group_count": 138,
+        "group_mad": 0.21053307369021912
+      },
+      {
+        "group_values": [
+          "flight",
+          "premium economy",
+          "Europe"
+        ],
+        "group_median": 7.285929180505946,
+        "group_count": 138,
+        "group_mad": 0.18605684274919287
+      },
+      {
+        "group_values": [
+          "flight",
+          "premium economy",
+          "Middle East"
+        ],
+        "group_median": 7.172340152993308,
+        "group_count": 67,
+        "group_mad": 0.168398120133733
+      },
+      {
+        "group_values": [
+          "flight",
+          "premium economy",
+          "North America"
+        ],
+        "group_median": 7.377411787763135,
+        "group_count": 62,
+        "group_mad": 0.19134321387265718
+      },
+      {
+        "group_values": [
+          "flight",
+          "premium economy",
+          "Oceania"
+        ],
+        "group_median": 7.391137760917971,
+        "group_count": 61,
+        "group_mad": 0.21027456861831162
+      },
+      {
+        "group_values": [
+          "flight",
+          "premium economy",
+          "South America"
+        ],
+        "group_median": 7.359251192172132,
+        "group_count": 67,
+        "group_mad": 0.16468672158788245
+      },
+      {
+        "group_values": [
+          "flight",
+          "premium economy",
+          "South Asia"
+        ],
+        "group_median": 7.031228759966886,
+        "group_count": 77,
+        "group_mad": 0.12408947487020416
+      },
+      {
+        "group_values": [
+          "flight",
+          "premium economy",
+          "Southeast Asia"
+        ],
+        "group_median": 6.988629010228944,
+        "group_count": 68,
+        "group_mad": 0.21468230854153747
+      },
+      {
+        "group_values": [
+          "hotel",
+          "standard",
+          "Africa"
+        ],
+        "group_median": 6.507074359610331,
+        "group_count": 218,
+        "group_mad": 0.4268066415968752
+      },
+      {
+        "group_values": [
+          "hotel",
+          "standard",
+          "Europe"
+        ],
+        "group_median": 6.642114059033621,
+        "group_count": 188,
+        "group_mad": 0.4449867617897345
+      },
+      {
+        "group_values": [
+          "hotel",
+          "standard",
+          "Middle East"
+        ],
+        "group_median": 6.671729101836914,
+        "group_count": 81,
+        "group_mad": 0.30391934519462005
+      },
+      {
+        "group_values": [
+          "hotel",
+          "standard",
+          "North America"
+        ],
+        "group_median": 6.514920076773994,
+        "group_count": 91,
+        "group_mad": 0.5138928703981831
+      },
+      {
+        "group_values": [
+          "hotel",
+          "standard",
+          "Oceania"
+        ],
+        "group_median": 6.884455203502172,
+        "group_count": 76,
+        "group_mad": 0.4005384092473392
+      },
+      {
+        "group_values": [
+          "hotel",
+          "standard",
+          "South America"
+        ],
+        "group_median": 6.808675001281461,
+        "group_count": 89,
+        "group_mad": 0.3736951895410776
+      },
+      {
+        "group_values": [
+          "hotel",
+          "standard",
+          "South Asia"
+        ],
+        "group_median": 6.434803307644228,
+        "group_count": 101,
+        "group_mad": 0.36994424126367953
+      },
+      {
+        "group_values": [
+          "hotel",
+          "standard",
+          "Southeast Asia"
+        ],
+        "group_median": 6.36419564538906,
+        "group_count": 86,
+        "group_mad": 0.47132669138131345
+      },
+      {
+        "group_values": [
+          "hotel",
+          "suite",
+          "Africa"
+        ],
+        "group_median": 7.22498959823436,
+        "group_count": 90,
+        "group_mad": 0.527574883348739
+      },
+      {
+        "group_values": [
+          "hotel",
+          "suite",
+          "Europe"
+        ],
+        "group_median": 7.4711876321372745,
+        "group_count": 72,
+        "group_mad": 0.4515061913893508
+      },
+      {
+        "group_values": [
+          "hotel",
+          "suite",
+          "Middle East"
+        ],
+        "group_median": 7.450126080353773,
+        "group_count": 41,
+        "group_mad": 0.404418097228306
+      },
+      {
+        "group_values": [
+          "hotel",
+          "suite",
+          "North America"
+        ],
+        "group_median": 7.777767489868744,
+        "group_count": 39,
+        "group_mad": 0.39407621298776263
+      },
+      {
+        "group_values": [
+          "hotel",
+          "suite",
+          "Oceania"
+        ],
+        "group_median": 7.719711635203351,
+        "group_count": 31,
+        "group_mad": 0.33451550502009386
+      },
+      {
+        "group_values": [
+          "hotel",
+          "suite",
+          "South America"
+        ],
+        "group_median": 7.66732533639977,
+        "group_count": 46,
+        "group_mad": 0.38955865488296393
+      },
+      {
+        "group_values": [
+          "hotel",
+          "suite",
+          "South Asia"
+        ],
+        "group_median": 7.137389718826709,
+        "group_count": 27,
+        "group_mad": 0.3696209074236281
+      },
+      {
+        "group_values": [
+          "hotel",
+          "suite",
+          "Southeast Asia"
+        ],
+        "group_median": 7.28734173810341,
+        "group_count": 31,
+        "group_mad": 0.3148698641373002
+      },
+      {
+        "group_values": [
+          "hotel",
+          "superior",
+          "Africa"
+        ],
+        "group_median": 6.8458373211671475,
+        "group_count": 139,
+        "group_mad": 0.4040313957548083
+      },
+      {
+        "group_values": [
+          "hotel",
+          "superior",
+          "Europe"
+        ],
+        "group_median": 6.99280422816145,
+        "group_count": 112,
+        "group_mad": 0.4082038723909762
+      },
+      {
+        "group_values": [
+          "hotel",
+          "superior",
+          "Middle East"
+        ],
+        "group_median": 7.121785429119812,
+        "group_count": 47,
+        "group_mad": 0.27951909268307507
+      },
+      {
+        "group_values": [
+          "hotel",
+          "superior",
+          "North America"
+        ],
+        "group_median": 6.919377478809925,
+        "group_count": 51,
+        "group_mad": 0.5270092342761856
+      },
+      {
+        "group_values": [
+          "hotel",
+          "superior",
+          "Oceania"
+        ],
+        "group_median": 7.086988739176858,
+        "group_count": 45,
+        "group_mad": 0.33476313073664254
+      },
+      {
+        "group_values": [
+          "hotel",
+          "superior",
+          "South America"
+        ],
+        "group_median": 6.96057938115787,
+        "group_count": 40,
+        "group_mad": 0.5377439522242344
+      },
+      {
+        "group_values": [
+          "hotel",
+          "superior",
+          "South Asia"
+        ],
+        "group_median": 6.702805272594098,
+        "group_count": 54,
+        "group_mad": 0.536386360681989
+      },
+      {
+        "group_values": [
+          "hotel",
+          "superior",
+          "Southeast Asia"
+        ],
+        "group_median": 6.697527952934474,
+        "group_count": 55,
+        "group_mad": 0.5611376866565427
+      }
+    ],
+    "global_log_median": 6.851872521734463,
+    "global_log_mad": 0.4672685162089536,
+    "minimum_group_count": 20
+  }
+}

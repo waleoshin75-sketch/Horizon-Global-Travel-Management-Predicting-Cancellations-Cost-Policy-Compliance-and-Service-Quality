@@ -1,0 +1,45 @@
+{
+  "feature_spec": {
+    "objective": "Forecast trip cost",
+    "selected_model": "Hist Gradient Boosting Regressor",
+    "target": "log_amount_usd (invert predictions with exp to obtain USD)",
+    "model_features": [
+      "service_type",
+      "travel_class",
+      "destination_region",
+      "international",
+      "advance_days",
+      "trip_length_days",
+      "peak_season"
+    ],
+    "numeric_features": [
+      "international",
+      "advance_days",
+      "trip_length_days",
+      "peak_season"
+    ],
+    "categorical_features": [
+      "service_type",
+      "travel_class",
+      "destination_region"
+    ],
+    "required_source_columns": [
+      "origin_city",
+      "destination_city",
+      "booking_date",
+      "travel_date",
+      "return_date",
+      "amount_usd",
+      "service_type",
+      "travel_class"
+    ],
+    "derived_features": {
+      "destination_region": "Mapped from normalized destination city using the notebook city-location map.",
+      "international": "1 when normalized origin and destination countries differ, else 0.",
+      "advance_days": "Corrected travel date minus booking date, in days; negative values become missing.",
+      "trip_length_days": "Corrected return date minus corrected travel date, in days; negative values become missing.",
+      "peak_season": "1 for travel months June, July, August, or December; otherwise 0."
+    },
+    "selection_metric": "Lowest held-out MAE ($231.850); RMSE $1,012.344, R2 0.506, WAPE 0.184."
+  }
+}
