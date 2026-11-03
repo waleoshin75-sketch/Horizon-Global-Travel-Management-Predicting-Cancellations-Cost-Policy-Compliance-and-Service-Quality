@@ -1,1554 +1,4878 @@
-# Horizon Global Travel Management: Predicting Cancellations, Cost, Policy Compliance and Service Quality
+# Horizon Global Travel Management: Predictive Decision Support System
 
-*An end-to-end Python machine learning project on dirty multi-table corporate travel data.*
+### TRAVEL Management Operations Prediction System
 
-![Python](https://img.shields.io/badge/Python-3.x-blue) ![pandas](https://img.shields.io/badge/pandas-data%20cleaning-informational) ![scikit-learn](https://img.shields.io/badge/scikit--learn-modelling-orange) ![Status](https://img.shields.io/badge/status-complete-brightgreen)
+<p align="left">
+<img src="https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white" alt="Python">
+<img src="https://img.shields.io/badge/scikit--learn-1.9-F7931E?logo=scikitlearn&logoColor=white" alt="scikit-learn">
+<img src="https://img.shields.io/badge/Streamlit-App-FF4B4B?logo=streamlit&logoColor=white" alt="Streamlit">
+<img src="https://img.shields.io/badge/Models-5-2E7D32" alt="Five models">
+</p>
 
----
+A corporate travel team deals with the same five problems every week: bookings that cancel, trip costs that are hard to budget, bookings that break policy, support tickets that end badly and invoices that look wrong. I built one model for each, tested every one on data it had never seen, and put all five behind a Streamlit app that a non-technical user can run.
+
+**Live app:** [Open the Streamlit app](YOUR-STREAMLIT-LINK)  |  **Code:** [GitHub repository](YOUR-GITHUB-LINK)
+
+| Page in the app | Business question | Model | Result on unseen data |
+| --- | --- | --- | --- |
+| Booking Cancellations | Which bookings may cancel? | Logistic Regression | Catches 59% of cancellations (ROC AUC 0.63) |
+| Trip Cost Forecast | What will a trip cost? | Hist Gradient Boosting | Average error $232 per booking (18%) |
+| Policy Compliance | Which bookings may break policy? | Logistic Regression | Catches 62% of out-of-policy bookings (ROC AUC 0.68) |
+| Customer Satisfaction | Which tickets may end badly? | Logistic Regression | Catches 85% of dissatisfied customers (ROC AUC 0.95) |
+| Booking Amount Anomalies | Which amounts look unusual? | Isolation Forest | Finds 13 of 18 anomalies with 10 false alarms (ROC AUC 0.95) |
 
 ## Table of Contents
 
 1. [Project Overview](#1-project-overview)
 2. [Dataset Overview](#2-dataset-overview)
-3. [Data Quality Assessment](#3-data-quality-assessment)
-4. [Data Cleaning & Error Correction](#4-data-cleaning--error-correction)
-5. [Feature Engineering](#5-feature-engineering)
-6. [Data Modeling & Relational Schema](#6-data-modeling--relational-schema)
-7. [Business Analysis](#7-business-analysis)
+3. [Data Dictionary](#3-data-dictionary)
+4. [Data Quality Audit](#4-data-quality-audit)
+5. [Data Cleaning and Error Checking](#5-data-cleaning-and-error-checking)
+6. [Feature Engineering](#6-feature-engineering)
+7. [Create Relationship Table](#7-create-relationship-table)
 8. [Exploratory Data Analysis](#8-exploratory-data-analysis)
-9. [Machine Learning](#9-machine-learning)
-10. [Data Visualization & Interpretation](#10-data-visualization--interpretation)
-11. [Validation and Quality Assurance](#11-validation-and-quality-assurance)
-12. [Key Findings & Insights](#12-key-findings--insights)
-13. [Recommendations](#13-recommendations)
-14. [Conclusion](#14-conclusion)
+9. [Analytical Base Table](#9-analytical-base-table)
+10. [Encode Categorical Columns](#10-encode-categorical-columns)
+11. [Separate X and y](#11-separate-x-and-y)
+12. [Train Test Split](#12-train-test-split)
+13. [Feature Scaling of Numerical Columns](#13-feature-scaling-of-numerical-columns)
+14. [Train Model](#14-train-model)
+15. [Predict X_test](#15-predict-x_test)
+16. [Compare X and y](#16-compare-x-and-y)
+17. [Evaluate Model](#17-evaluate-model)
+18. [Business Analysis](#18-business-analysis)
+19. [Save Model, Scaler and Features](#19-save-model-scaler-and-features)
+20. [Download Model, Scaler and Features](#20-download-model-scaler-and-features)
+21. [Key Findings and Insights](#21-key-findings-and-insights)
+22. [Recommendations](#22-recommendations)
+23. [Conclusion](#23-conclusion)
 
 ---
 
 ## 1. Project Overview
 
-A travel management company (TMC) books flights, hotels and cars for corporate clients around the world. Its data lives in five separate tables, and it arrived messy: duplicate rows, dates in six different formats, money stored as text, spelling variants for the same country or city, and bookings pointing at clients that don't exist.
+**Horizon Global Travel Management** books flights, hotels and car rentals for 60 corporate clients. Its data lives in five tables, arrives messy, and has to answer five operational questions.
 
-This project takes that raw data from first load to working models. I cleaned it, engineered features, organised it into a star schema, analysed the business, and trained machine learning models against five objectives, each judged against a simple baseline.
+| # | Business objective | ML task | Target | Model chosen |
+| --- | --- | --- | --- | --- |
+| 1 | Reduce booking cancellations | Classification | `cancelled`: booking status is Cancelled (17.1% of bookings) | Logistic Regression |
+| 2 | Forecast trip cost to improve client budgeting | Regression | `amount_usd`, modelled as its logarithm and converted back to dollars | Hist Gradient Boosting Regressor |
+| 3 | Improve travel policy compliance | Classification | `out_of_policy`: policy_compliant is No (26.2% of bookings) | Logistic Regression |
+| 4 | Raise customer satisfaction | Classification | `dissatisfied`: CSAT score of 1 or 2 (27.6% of labelled tickets) | Logistic Regression |
+| 5 | Detect booking amount anomalies and billing errors | Anomaly detection (unsupervised) | none while training; the answer key is used only to score the result | Isolation Forest |
 
-| # | Business objective | Question it answers | Approach |
-|---|---|---|---|
-| 1 | Reduce cancellations | Which bookings are likely to be cancelled? | Classification |
-| 2 | Forecast trip cost | What will a booking cost, for client budgeting? | Regression |
-| 3 | Understand policy compliance | Which factors drive out-of-policy bookings? | Classification + permutation importance |
-| 4 | Prioritise support | Which tickets will escalate? | Classification (ROC / AUC) |
-| 5 | Audit billing | Which bookings look unusual? | Unsupervised anomaly detection |
+What the project covers, start to finish:
 
-**Tools:** Python, pandas, NumPy, scikit-learn, Matplotlib, Seaborn, Jupyter Notebook.
+- Auditing and cleaning five dirty tables, then joining them through a relationship table.
+- Engineering features and building one analytical base table.
+- Training at least three models per objective (one for anomalies), comparing them on a held-out test set and choosing by the metric that fits the problem.
+- Turning each result into a business decision, saving the models and serving them in a Streamlit app.
 
----
+**Tools:** Python, pandas, NumPy, scikit-learn, Matplotlib, joblib, Streamlit.
+
+**Repository structure**
+
+```text
+horizon-travel-prediction-system/
+├── README.md
+├── app.py                              # Streamlit app (section 20)
+├── requirements.txt
+├── images/                             # charts used in this README
+├── travel_mgmt_raw/                    # the five raw tables, data dictionary and answer key
+└── models/business_objectives/
+    ├── 01_booking_cancellations/       # model.joblib, pipeline.joblib, scaler.joblib, features.json
+    ├── 02_trip_cost_forecasting/
+    ├── 03_policy_compliance/
+    ├── 04_customer_satisfaction/
+    └── 05_booking_amount_anomalies/
+```
 
 ---
 
 ## 2. Dataset Overview
 
-The data is synthetic, generated with a seeded script so anyone can reproduce it. Five tables feed the analysis:
+The data is synthetic, generated for this portfolio, and deliberately dirty: duplicate rows, mixed spellings, text in number columns and unreadable dates. That is the point. It lets the cleaning work be checked against known problems.
 
-| Table | Type | What it holds | Raw rows | Clean rows |
-|---|---|---|---|---|
-| `dim_clients` | Dimension | Corporate clients, tier, budget | 64 | 58 |
-| `dim_travelers` | Dimension | Employees who travel, grade, loyalty | 1,225 | 1,150 |
-| `dim_suppliers` | Dimension | Airlines, hotels, car rental firms | 53 | 50 |
-| `fact_bookings` | Fact | Every booking with amount and dates | 6,060 | 5,528 |
-| `fact_support_tickets` | Fact | Support tickets with response times and CSAT | 2,530 | 2,263 |
+| Table | Rows | Columns | What it holds |
+| --- | ---: | ---: | --- |
+| `fact_bookings` | 6,060 | 16 | One row per booking: service, class, dates, channel, amount, status, policy flag |
+| `fact_support_tickets` | 2,530 | 12 | One row per support ticket: category, priority, channel, response times, escalation, CSAT |
+| `dim_clients` | 64 | 8 | Corporate clients: tier, country, industry, travel policy |
+| `dim_suppliers` | 53 | 7 | Airlines, hotels and car rental firms: rating, cancellation flexibility, preferred partner |
+| `dim_travelers` | 1,225 | 7 | Travellers: grade and home office |
+| `anomaly_answer_key` | 6,000 | 2 | Which bookings were planted as anomalies. Used only to score Objective 5 |
 
-A `data_dictionary.csv` file documents every column.
-
-The cleaned data became a star schema of 3 dimensions and 2 facts. Two flattened views were built for modelling: `bookings_full` (5,528 × 64) and `tickets_full` (2,263 × 52).
-
----
-
-## 3. Data Quality Assessment
-
-Before changing anything, I audited every raw table with five checks: structure, missing values, duplicates, sample rows and numeric ranges.
-
-### 3.1 Structure: columns and data types
+Loading the five tables:
 
 ```python
-for label, df in tables.items():
-    print('=' * 70)
-    print(f'{label}  shape={df.shape}')
-    print('-' * 70)
-    for col in df.columns:
-        print(f'  {col:<28} {df[col].dtype}')
-```
-
-```text
-======================================================================
-dim_clients  shape=(64, 8)
-----------------------------------------------------------------------
-  client_id                    str
-  client_name                  str
-  country                      str
-  industry                     str
-  client_tier                  str
-  contract_start               str
-  annual_travel_budget_usd     str
-  has_travel_policy            str
-======================================================================
-dim_travelers  shape=(1225, 7)
-----------------------------------------------------------------------
-  traveler_id                  str
-  client_id                    str
-  grade                        str
-  home_country                 str
-  years_with_employer          float64
-  loyalty_member               str
-  trips_last_year              float64
-======================================================================
-dim_suppliers  shape=(53, 7)
-----------------------------------------------------------------------
-  supplier_id                  str
-  supplier_name                str
-  supplier_type                str
-  country                      str
-  preferred_partner            str
-  service_rating               str
-  cancellation_flexibility     str
-======================================================================
-fact_bookings  shape=(6060, 16)
-----------------------------------------------------------------------
-  booking_id                   str
-  client_id                    str
-  traveler_id                  str
-  supplier_id                  str
-  service_type                 str
-  travel_class                 str
-  booking_channel              str
-  origin_city                  str
-  destination_city             str
-  booking_date                 str
-  travel_date                  str
-  return_date                  str
-  amount_usd                   str
-  policy_compliant             str
-  booking_status               str
-  refund_usd                   str
-======================================================================
-fact_support_tickets  shape=(2530, 12)
-----------------------------------------------------------------------
-  ticket_id                    str
-  booking_id                   str
-  client_id                    str
-  ticket_date                  str
-  category                     str
-  priority                     str
-  contact_channel              str
-  first_response_hours         str
-  resolution_hours             float64
-  escalated                    str
-  csat_score                   str
-  agent_notes_length           int64
-```
-
-Money, ratings and budgets arrive as text (`str`), which is the first sign that they need converting.
-
-### 3.2 Missing values
-
-```python
-missing_summary = []
-for label, df in tables.items():
-    miss = df.isnull().sum()
-    miss_pct = (miss / len(df) * 100).round(2)
-    for col in df.columns:
-        missing_summary.append({
-            'table': label,
-            'column': col,
-            'missing_count': int(miss[col]),
-            'missing_pct': float(miss_pct[col]),
-        })
-
-missing_df = pd.DataFrame(missing_summary)
-missing_df = missing_df[missing_df['missing_count'] > 0].sort_values(
-    ['table', 'missing_count'], ascending=[True, False]
-)
-print('Columns with missing values:')
-print(missing_df.to_string(index=False))
-if missing_df.empty:
-    print('No missing values found.')
-```
-
-```text
-Columns with missing values:
-               table               column  missing_count  missing_pct
-       dim_suppliers       service_rating              1         1.89
-       dim_travelers      trips_last_year             50         4.08
-       dim_travelers  years_with_employer              6         0.49
-       fact_bookings          supplier_id             42         0.69
-fact_support_tickets            client_id             20         0.79
-fact_support_tickets first_response_hours              8         0.32
-```
-
-Gaps are small (under 5% in every column), but a missing `supplier_id` or `client_id` breaks a join, so those matter most.
-
-### 3.3 Duplicate rows
-
-```python
-for label, df in tables.items():
-    dup_count = int(df.duplicated().sum())
-    print(f'{label}: {dup_count} fully-duplicated rows')
-```
-
-```text
-dim_clients: 4 fully-duplicated rows
-dim_travelers: 25 fully-duplicated rows
-dim_suppliers: 3 fully-duplicated rows
-fact_bookings: 60 fully-duplicated rows
-fact_support_tickets: 30 fully-duplicated rows
-```
-
-That is 122 exact duplicates in total, which would double-count bookings and tickets if left in.
-
-### 3.4 Sample rows
-
-```python
-for label, df in tables.items():
-    print('=' * 70)
-    print(f'{label}')
-    print(df.head().to_string(index=False))
-```
-
-This prints the first five rows of each table. Reading them is where the formatting problems show up: budgets such as `1.25M` and `$1,250,000`, ratings such as `4/5`, amounts such as `USD 1 250.00`, `2 hrs` for durations, and dates written in different layouts.
-
-### 3.5 Numeric and categorical sanity checks
-
-```python
-for label, df in tables.items():
-    print('=' * 70)
-    print(f'{label}')
-    num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-    obj_cols = df.select_dtypes(exclude=[np.number]).columns.tolist()
-    print(f'  Numeric cols ({len(num_cols)}): {num_cols}')
-    print(f'  Object  cols ({len(obj_cols)}): {obj_cols}')
-    for c in num_cols:
-        print(f'    {c:<28} min={df[c].min()}, max={df[c].max()}, mean={df[c].mean():.2f}')
-```
-
-```text
-======================================================================
-dim_clients
-  Numeric cols (0): []
-  Object  cols (8): ['client_id', 'client_name', 'country', 'industry', 'client_tier', 'contract_start', 'annual_travel_budget_usd', 'has_travel_policy']
-======================================================================
-dim_travelers
-  Numeric cols (2): ['years_with_employer', 'trips_last_year']
-  Object  cols (5): ['traveler_id', 'client_id', 'grade', 'home_country', 'loyalty_member']
-    years_with_employer          min=-5.0, max=200.0, mean=14.75
-    trips_last_year              min=0.0, max=15.0, mean=5.11
-======================================================================
-dim_suppliers
-  Numeric cols (0): []
-  Object  cols (7): ['supplier_id', 'supplier_name', 'supplier_type', 'country', 'preferred_partner', 'service_rating', 'cancellation_flexibility']
-======================================================================
-fact_bookings
-  Numeric cols (0): []
-  Object  cols (16): ['booking_id', 'client_id', 'traveler_id', 'supplier_id', 'service_type', 'travel_class', 'booking_channel', 'origin_city', 'destination_city', 'booking_date', 'travel_date', 'return_date', 'amount_usd', 'policy_compliant', 'booking_status', 'refund_usd']
-======================================================================
-fact_support_tickets
-  Numeric cols (2): ['resolution_hours', 'agent_notes_length']
-  Object  cols (10): ['ticket_id', 'booking_id', 'client_id', 'ticket_date', 'category', 'priority', 'contact_channel', 'first_response_hours', 'escalated', 'csat_score']
-    resolution_hours             min=-10.0, max=9999.0, mean=40.47
-    agent_notes_length           min=10, max=799, mean=399.04
-```
-
-The ranges expose impossible values: negative or extreme tenure in `years_with_employer`, and extreme `resolution_hours` and `first_response_hours` in the support tickets.
-
-### 3.6 Summary of issues found
-
-| Issue | Where | Fixed in |
-|---|---|---|
-| Exact duplicate rows (122 in total) | Every table | Section 4 |
-| Numbers stored as text | Budgets, ratings, amounts, hours | Section 4 |
-| Six mixed date formats | Contract, booking, travel, return and ticket dates | Section 4 |
-| Yes/No written many ways (`Yes`, `Y`, `TRUE`, `1`) | Policy, loyalty, partner and escalation flags | Section 4 |
-| Spelling variants for countries, cities and tiers | `country`, `city`, `client_tier` | Section 4 |
-| Impossible values | Tenure, resolution time, amounts, CSAT | Section 4 |
-| Missing keys | `supplier_id`, `client_id` | Sections 4 and 6 |
-| Orphan foreign keys | Bookings and tickets | Section 6 |
-
----
-
-## 4. Data Cleaning & Error Correction
-
-The first version of my cleaning pass fixed the obvious problems but left some behind: only some date formats parsed, country and city variants were merely case-normalised, and a blanket `dropna()` threw away rows that could have been repaired. The version below replaces it. It repairs wherever the right answer is knowable and drops a row only when a key field is missing.
-
-**What the cleaning does, in order**
-
-1. Removes exact duplicates, then duplicate primary keys
-2. Converts text numbers to real numbers (`$1,250`, `USD 1 250.00`, `1.25M`, `2 hrs`, `3 days`)
-3. Parses dates against all six known formats (slash dates are read day-first)
-4. Merges spelling variants into one label: countries (`UK`, `U.K.`, `Great Britain`), cities (`NYC`, `New York`) and client tiers (`G` becomes Gold, `S` becomes Standard, `P` becomes Platinum)
-5. Standardises Yes/No style columns to True/False
-6. Treats impossible values as missing, then fills them with a sensible median: zero or negative amounts (median by service type), CSAT outside 1 to 5, resolution time outside 0 to 720 hours, tenure outside 0 to 60 years
-7. Swaps travel and return dates that arrive in the wrong order
-8. Recovers a missing ticket `client_id` from its linked booking
-9. Drops a row only if a required key or date is still missing
-
-```python
-import numpy as np
-import pandas as pd
-
-DATA_DIR = "."
-FILES = {
-    "dim_clients.csv": "dim_clients",
-    "dim_travelers.csv": "dim_travelers",
-    "dim_suppliers.csv": "dim_suppliers",
-    "fact_bookings (1).csv": "fact_bookings",
-    "fact_support_tickets.csv": "fact_support_tickets",
-}
-raw = {label: pd.read_csv(f"{DATA_DIR}/{fname}") for fname, label in FILES.items()}
-report = []   # (table, step, rows_removed)
-
-# ---------- helpers ----------
-DATE_FORMATS = ["%Y-%m-%d", "%d/%m/%Y", "%m-%d-%Y", "%d %b %Y", "%Y/%m/%d", "%B %d, %Y"]   # day-first for slashes
-MISSING = ["", "N/A", "n/a", "NA", "null", "None", "nan", "-", "TBD", "pending", "??"]
-
-def clean_text(s):
-    return s.astype("string").str.strip().replace(MISSING, pd.NA)
-
-def to_num(s):
-    """'$1,200.50', 'USD 1 200.50', '1.25M', '2 hrs', '3 days' -> float; anything else -> NaN"""
-    t = clean_text(s).str.upper().str.replace(r"[,$\s]|USD|HRS?|H$|DAYS?|D$", "", regex=True)
-    mult = t.str.endswith("M").fillna(False).map({True: 1e6, False: 1.0})
-    return pd.to_numeric(t.str.replace("M", "", regex=False), errors="coerce") * mult
-
-def to_date(s):
-    s = clean_text(s)
-    out = pd.Series(pd.NaT, index=s.index, dtype="datetime64[ns]")
-    for fmt in DATE_FORMATS:                      # try every known format on whatever is still unparsed
-        todo = out.isna() & s.notna()
-        out[todo] = pd.to_datetime(s[todo], format=fmt, errors="coerce")
-    return out
-
-def to_bool(s):
-    t = clean_text(s).str.lower()
-    return t.map({"yes": True, "y": True, "true": True, "1": True, "no": False, "n": False, "false": False, "0": False})
-
-def canon(s, valid, extra=None):
-    """Map any spelling/case of a category to its standard label; unknown values become missing."""
-    lookup = {v.lower(): v for v in valid}
-    lookup.update({k.lower(): v for k, v in (extra or {}).items()})
-    return clean_text(s).str.lower().map(lookup)
-
-COUNTRIES = {
-    "usa": "United States", "u.s.a": "United States", "us": "United States", "united states": "United States",
-    "uk": "United Kingdom", "u.k.": "United Kingdom", "great britain": "United Kingdom", "united kingdom": "United Kingdom",
-    "uae": "UAE", "u.a.e": "UAE", "united arab emirates": "UAE",
-    "ng": "Nigeria", "nigeria": "Nigeria", "rsa": "South Africa", "s. africa": "South Africa", "south africa": "South Africa",
-    "in": "India", "india": "India", "deutschland": "Germany", "germany": "Germany",
-    "sg": "Singapore", "singapore": "Singapore", "brasil": "Brazil", "brazil": "Brazil", "aus": "Australia", "australia": "Australia",
-}
-CITIES = {
-    "new york": "New York", "nyc": "New York", "london": "London", "lon": "London", "dubai": "Dubai", "dxb": "Dubai",
-    "lagos": "Lagos", "los": "Lagos", "johannesburg": "Johannesburg", "jnb": "Johannesburg", "joburg": "Johannesburg",
-    "mumbai": "Mumbai", "bombay": "Mumbai", "bom": "Mumbai", "frankfurt": "Frankfurt", "fra": "Frankfurt",
-    "singapore": "Singapore", "sin": "Singapore", "sao paulo": "Sao Paulo", "são paulo": "Sao Paulo", "gru": "Sao Paulo",
-    "sydney": "Sydney", "syd": "Sydney",
-}
-TIERS = ["Standard", "Gold", "Platinum"]
-TIER_EXTRA = {"s": "Standard", "g": "Gold", "p": "Platinum"}
-
-def finish(df, required, name):
-    """Drop rows missing a REQUIRED field only; fill every other gap (median / 'Unknown' / most common)."""
-    before = len(df)
-    df = df.dropna(subset=required).copy()
-    report.append((name, "rows missing a required field", before - len(df)))
-    for c in df.columns:
-        if df[c].isna().any():
-            if pd.api.types.is_numeric_dtype(df[c]):
-                df[c] = df[c].fillna(df[c].median())
-            elif df[c].dtype == bool or set(df[c].dropna().unique()) <= {True, False}:
-                df[c] = df[c].fillna(df[c].mode().iloc[0])
-            elif not pd.api.types.is_datetime64_any_dtype(df[c]):
-                df[c] = df[c].fillna("Unknown")
-    return df
-
-tables = {}
-
-# ---------- dim_clients ----------
-d = raw["dim_clients"]; n0 = len(d); d = d.drop_duplicates().copy(); report.append(("dim_clients", "exact duplicates", n0 - len(d)))
-d["client_id"] = clean_text(d["client_id"]).str.upper()
-d["client_name"] = clean_text(d["client_name"]).str.title()
-d["country"] = clean_text(d["country"]).str.lower().map(COUNTRIES)
-d["industry"] = clean_text(d["industry"]).str.title()
-d["client_tier"] = canon(d["client_tier"], TIERS, TIER_EXTRA)
-d["contract_start"] = to_date(d["contract_start"])
-d["annual_travel_budget_usd"] = to_num(d["annual_travel_budget_usd"]).where(lambda x: x > 0)
-d["has_travel_policy"] = to_bool(d["has_travel_policy"])
-tables["dim_clients"] = finish(d.drop_duplicates("client_id"), ["client_id", "contract_start"], "dim_clients")
-
-# ---------- dim_suppliers ----------
-d = raw["dim_suppliers"]; n0 = len(d); d = d.drop_duplicates().copy(); report.append(("dim_suppliers", "exact duplicates", n0 - len(d)))
-d["supplier_id"] = clean_text(d["supplier_id"]).str.upper()
-d["supplier_name"] = clean_text(d["supplier_name"]).str.title()
-d["supplier_type"] = canon(d["supplier_type"], ["Airline", "Hotel", "Car Rental"])
-d["country"] = clean_text(d["country"]).str.lower().map(COUNTRIES)
-d["preferred_partner"] = to_bool(d["preferred_partner"])
-d["service_rating"] = pd.to_numeric(clean_text(d["service_rating"]).str.extract(r"^(\d+(?:\.\d+)?)")[0], errors="coerce").where(lambda x: x.between(1, 5))
-d["cancellation_flexibility"] = canon(clean_text(d["cancellation_flexibility"]).str.replace("-", " "), ["Flexible"],
-                                      {"semi flexible": "Semi-Flexible", "non refundable": "Non-Refundable"})
-tables["dim_suppliers"] = finish(d.drop_duplicates("supplier_id"), ["supplier_id"], "dim_suppliers")
-
-# ---------- dim_travelers ----------
-d = raw["dim_travelers"]; n0 = len(d); d = d.drop_duplicates().copy(); report.append(("dim_travelers", "exact duplicates", n0 - len(d)))
-d["traveler_id"] = clean_text(d["traveler_id"]).str.upper()
-d["client_id"] = clean_text(d["client_id"]).str.upper()
-d["grade"] = canon(d["grade"], ["Staff", "Manager", "Director", "Executive"])
-d["home_country"] = clean_text(d["home_country"]).str.lower().map(COUNTRIES)
-d["loyalty_member"] = to_bool(d["loyalty_member"]).map({True: "Yes", False: "No"})
-yrs = to_num(d["years_with_employer"])
-d["years_with_employer"] = yrs.where(yrs.between(0, 60))                      # impossible tenure -> missing -> median
-d["trips_last_year"] = to_num(d["trips_last_year"]).where(lambda x: x.between(0, 200))
-tables["dim_travelers"] = finish(d.drop_duplicates("traveler_id"), ["traveler_id", "client_id"], "dim_travelers")
-
-# ---------- fact_bookings ----------
-b = raw["fact_bookings"]; n0 = len(b); b = b.drop_duplicates().copy(); report.append(("fact_bookings", "exact duplicates", n0 - len(b)))
-for c in ["booking_id", "client_id", "traveler_id", "supplier_id"]:
-    b[c] = clean_text(b[c]).str.upper()
-for c in ["booking_date", "travel_date", "return_date"]:
-    b[c] = to_date(b[c])
-swap = b["return_date"] < b["travel_date"]                                     # return before travel: swap them back
-b.loc[swap, ["travel_date", "return_date"]] = b.loc[swap, ["return_date", "travel_date"]].values
-report.append(("fact_bookings", "travel/return dates swapped back (kept)", int(swap.sum())))
-b["service_type"] = canon(b["service_type"], ["Flight", "Hotel", "Car Rental"])
-b["travel_class"] = canon(b["travel_class"], ["Economy", "Premium Economy", "Business", "First", "Standard", "Superior", "Suite", "SUV", "Luxury"])
-b["booking_channel"] = canon(clean_text(b["booking_channel"]).str.replace(" ", ""), [],
-                             {"onlinetool": "Online Tool", "mobileapp": "Mobile App", "travelagent": "Travel Agent", "phone": "Phone"})
-b["origin_city"] = clean_text(b["origin_city"]).str.lower().map(CITIES)
-b["destination_city"] = clean_text(b["destination_city"]).str.lower().map(CITIES)
-b["amount_usd"] = to_num(b["amount_usd"]).where(lambda x: x > 0)              # zero / negative amounts are errors
-b["amount_usd"] = b["amount_usd"].fillna(b.groupby("service_type")["amount_usd"].transform("median")).fillna(b["amount_usd"].median())
-b["refund_usd"] = to_num(b["refund_usd"]).where(lambda x: x >= 0).fillna(0)
-b["policy_compliant"] = to_bool(b["policy_compliant"])
-b["booking_status"] = canon(b["booking_status"], ["Completed", "Cancelled", "No-show"], {"canceled": "Cancelled", "no show": "No-show"})
-b = b.drop_duplicates("booking_id")
-tables["fact_bookings"] = finish(b, ["booking_id", "client_id", "traveler_id", "supplier_id", "booking_date", "travel_date", "return_date"], "fact_bookings")
-
-# ---------- fact_support_tickets ----------
-t = raw["fact_support_tickets"]; n0 = len(t); t = t.drop_duplicates().copy(); report.append(("fact_support_tickets", "exact duplicates", n0 - len(t)))
-for c in ["ticket_id", "booking_id", "client_id"]:
-    t[c] = clean_text(t[c]).str.upper()
-recover = t["client_id"].isna() & t["booking_id"].isin(tables["fact_bookings"]["booking_id"])
-t.loc[recover, "client_id"] = t.loc[recover, "booking_id"].map(tables["fact_bookings"].set_index("booking_id")["client_id"])
-report.append(("fact_support_tickets", "missing client_id recovered from the booking (kept)", int(recover.sum())))
-t["ticket_date"] = to_date(t["ticket_date"])
-t["category"] = canon(t["category"], ["Refund Request", "Itinerary Change", "Visa or Document Query", "Billing Dispute", "Complaint", "Emergency Rebooking"])
-t["priority"] = canon(t["priority"], ["Low", "Medium", "High", "Critical"])
-t["contact_channel"] = canon(t["contact_channel"], ["Email", "Phone", "Chat", "Portal"])
-t["escalated"] = to_bool(t["escalated"])
-t["first_response_hours"] = to_num(t["first_response_hours"]).where(lambda x: x >= 0)
-t["resolution_hours"] = to_num(t["resolution_hours"]).where(lambda x: (x > 0) & (x <= 720))
-t["csat_score"] = to_num(t["csat_score"]).where(lambda x: x.between(1, 5))
-t = t.drop_duplicates("ticket_id")
-tables["fact_support_tickets"] = finish(t, ["ticket_id", "booking_id", "client_id", "ticket_date"], "fact_support_tickets")
-
-# ---------- summary ----------
-print("=== CLEANING v2 COMPLETE ===\n")
-for tbl, step, n in report:
-    print(f"  {tbl:<22} {step:<55} {n:>5}")
-print()
-for label, df in tables.items():
-    print(f"  {label:<24} raw={len(raw[label]):>5}  clean={len(df):>5}  shape={df.shape}  missing={int(df.isna().sum().sum())}")
-```
-
-**Result:** every table has zero missing values, and far fewer rows were lost than before.
-
-| Table | Raw | Clean |
-|---|---|---|
-| `dim_clients` | 64 | 58 |
-| `dim_travelers` | 1,225 | 1,150 |
-| `dim_suppliers` | 53 | 50 |
-| `fact_bookings` | 6,060 | 5,528 (5,762 after cleaning, then 234 orphans removed in section 6) |
-| `fact_support_tickets` | 2,530 | 2,263 |
-
----
-
-## 5. Feature Engineering
-
-New columns turn raw fields into things a model can learn from.
-
-| Table | Features created |
-|---|---|
-| `fact_bookings` | `booking_lead_days`, `trip_duration_days`, `is_same_city`, `amount_band`, `is_policy_compliant`, `booking_month`, `travel_month` |
-| `fact_support_tickets` | `is_escalated`, `csat_score` (numeric), `fast_response` (first reply within 4 hours), `quick_resolution` (closed within 24 hours), `ticket_month` |
-| `dim_travelers` | `tenure_bucket`, `trip_volume_bucket`, `is_loyalty_member`, plus booking and ticket aggregates: `total_bookings`, `total_spend_usd`, `avg_spend_usd`, `avg_lead_days`, `avg_trip_duration`, `policy_compliant_rate`, `same_city_rate`, `total_tickets`, `escalation_rate`, `avg_resolution_hours`, `avg_csat`, `fast_response_rate` |
-| `dim_clients` | `budget_tier`, `contract_months`, `is_high_tier`, plus `client_total_bookings`, `client_total_spend_usd`, `client_avg_spend_usd`, `client_policy_compliant_rate` |
-
-```python
-# Feature engineering on cleaned tables
-import pandas as pd
-import numpy as np
-
-print("=== FEATURE ENGINEERING ===\n")
-
-clients = tables["dim_clients"].copy()
-travelers = tables["dim_travelers"].copy()
-suppliers = tables["dim_suppliers"].copy()
-bookings = tables["fact_bookings"].copy()
-tickets = tables["fact_support_tickets"].copy()
-
-# ---------------------------------------------------------
-# 1. dim_travelers features
-# ---------------------------------------------------------
-travelers["tenure_bucket"] = pd.cut(
-    travelers["years_with_employer"],
-    bins=[0, 2, 5, 10, 20, 60],
-    labels=["0-2yr", "2-5yr", "5-10yr", "10-20yr", "20+yr"],
-    include_lowest=True,
-)
-travelers["trip_volume_bucket"] = pd.cut(
-    travelers["trips_last_year"],
-    bins=[-0.1, 0, 3, 7, 15, 100],
-    labels=["0", "1-3", "4-7", "8-15", "16+"],
-    include_lowest=True,
-)
-travelers["is_loyalty_member"] = travelers["loyalty_member"].eq("Yes").astype(int)
-print("dim_travelers: added tenure_bucket, trip_volume_bucket, is_loyalty_member")
-
-# ---------------------------------------------------------
-# 2. dim_clients features
-# ---------------------------------------------------------
-clients["budget_tier"] = pd.qcut(
-    clients["annual_travel_budget_usd"],
-    q=4,
-    labels=["Low", "Medium", "High", "Premium"],
-    duplicates="drop",
-)
-clients["contract_months"] = (
-    pd.Timestamp("today").normalize() - clients["contract_start"]
-).dt.days / 30.44
-clients["is_high_tier"] = clients["client_tier"].isin(["Platinum", "Gold"]).astype(int)
-print("dim_clients: added budget_tier, contract_months, is_high_tier")
-
-# ---------------------------------------------------------
-# 3. fact_bookings features
-# ---------------------------------------------------------
-bookings["booking_lead_days"] = (
-    bookings["travel_date"] - bookings["booking_date"]
-).dt.days
-bookings["trip_duration_days"] = (
-    bookings["return_date"] - bookings["travel_date"]
-).dt.days
-bookings["is_same_city"] = (
-    bookings["origin_city"].eq(bookings["destination_city"]).astype(int)
-)
-bookings["amount_band"] = pd.qcut(
-    bookings["amount_usd"],
-    q=4,
-    labels=["Low", "Medium", "High", "Premium"],
-    duplicates="drop",
-)
-bookings["is_policy_compliant"] = bookings["policy_compliant"].astype(int)
-bookings["booking_month"] = bookings["booking_date"].dt.to_period("M")
-bookings["travel_month"] = bookings["travel_date"].dt.to_period("M")
-print(
-    "fact_bookings: added booking_lead_days, trip_duration_days, is_same_city, amount_band, is_policy_compliant, booking_month, travel_month"
-)
-
-# ---------------------------------------------------------
-# 4. fact_support_tickets features
-# ---------------------------------------------------------
-tickets["is_escalated"] = tickets["escalated"].astype(int)
-tickets["csat_score"] = pd.to_numeric(tickets["csat_score"], errors="coerce")
-tickets["fast_response"] = (tickets["first_response_hours"] <= 4).astype(int)
-tickets["quick_resolution"] = (tickets["resolution_hours"] <= 24).astype(int)
-tickets["ticket_month"] = tickets["ticket_date"].dt.to_period("M")
-print(
-    "fact_support_tickets: added is_escalated, csat_score, fast_response, quick_resolution, ticket_month"
-)
-
-# ---------------------------------------------------------
-# 5. Traveler-level aggregated features
-# ---------------------------------------------------------
-# Bookings per traveler
-b_agg = (
-    bookings.groupby("traveler_id")
-    .agg(
-        total_bookings=("booking_id", "count"),
-        total_spend_usd=("amount_usd", "sum"),
-        avg_spend_usd=("amount_usd", "mean"),
-        avg_lead_days=("booking_lead_days", "mean"),
-        avg_trip_duration=("trip_duration_days", "mean"),
-        policy_compliant_rate=("is_policy_compliant", "mean"),
-        same_city_rate=("is_same_city", "mean"),
-    )
-    .reset_index()
-)
-
-# Tickets per traveler (via booking_id join)
-tickets_with_traveler = tickets.merge(
-    bookings[["booking_id", "traveler_id"]], on="booking_id", how="left"
-)
-t_agg = (
-    tickets_with_traveler.groupby("traveler_id")
-    .agg(
-        total_tickets=("ticket_id", "count"),
-        escalation_rate=("is_escalated", "mean"),
-        avg_resolution_hours=("resolution_hours", "mean"),
-        avg_csat=("csat_score", "mean"),
-        fast_response_rate=("fast_response", "mean"),
-    )
-    .reset_index()
-)
-
-# Merge traveler features
-travelers = travelers.merge(b_agg, on="traveler_id", how="left")
-travelers = travelers.merge(t_agg, on="traveler_id", how="left")
-
-# Fill missing for travelers with no bookings/tickets
-fill_cols = {
-    "total_bookings": 0,
-    "total_spend_usd": 0.0,
-    "avg_spend_usd": 0.0,
-    "avg_lead_days": 0.0,
-    "avg_trip_duration": 0.0,
-    "policy_compliant_rate": 0.0,
-    "same_city_rate": 0.0,
-    "total_tickets": 0,
-    "escalation_rate": 0.0,
-    "avg_resolution_hours": 0.0,
-    "avg_csat": 0.0,
-    "fast_response_rate": 0.0,
-}
-for c, v in fill_cols.items():
-    if c in travelers.columns:
-        travelers[c] = travelers[c].fillna(v)
-
-print("Traveler-level: aggregated bookings + support tickets features merged")
-
-# ---------------------------------------------------------
-# 6. Client-level aggregated features
-# ---------------------------------------------------------
-c_bookings = bookings.merge(clients[["client_id"]], on="client_id", how="left")
-cb_agg = (
-    c_bookings.groupby("client_id")
-    .agg(
-        client_total_bookings=("booking_id", "count"),
-        client_total_spend_usd=("amount_usd", "sum"),
-        client_avg_spend_usd=("amount_usd", "mean"),
-        client_policy_compliant_rate=("is_policy_compliant", "mean"),
-    )
-    .reset_index()
-)
-
-clients = clients.merge(cb_agg, on="client_id", how="left")
-print("Client-level: aggregated booking features merged")
-
-# ---------------------------------------------------------
-# 7. Store enriched tables back
-# ---------------------------------------------------------
-tables["dim_clients"] = clients
-tables["dim_travelers"] = travelers
-tables["dim_suppliers"] = suppliers
-tables["fact_bookings"] = bookings
-tables["fact_support_tickets"] = tickets
-
-print()
-print("=== FEATURE ENGINEERING COMPLETE ===")
-print("\nEnriched table shapes:")
-for label, df in tables.items():
-    print("  {:<24} shape={}  columns={}".format(label, df.shape, len(df.columns)))
-
-print("\ndim_travelers feature columns:")
-for c in travelers.columns:
-    print("  - {}".format(c))
-```
-
----
-
-## 6. Data Modeling & Relational Schema
-
-The clean tables form a star schema: three dimensions describe *who* and *what*, and two fact tables record *what happened*.
-
-```
-dim_clients ──────┐
-dim_travelers ────┼──▶ fact_bookings ──▶ fact_support_tickets
-dim_suppliers ────┘
-```
-
-| Relationship | Key |
-|---|---|
-| `fact_bookings` → `dim_clients` | `client_id` |
-| `fact_bookings` → `dim_travelers` | `traveler_id` |
-| `fact_bookings` → `dim_suppliers` | `supplier_id` |
-| `fact_support_tickets` → `fact_bookings` | `booking_id` |
-
-To enforce the relationships, the final step drops bookings whose client, traveler or supplier doesn't exist, drops tickets whose booking is gone, and keeps only dimension rows that appear in the facts. Primary keys are then checked for uniqueness. The two flattened views, `bookings_full` (5,528 × 64) and `tickets_full` (2,263 × 52), put everything on one row per booking or ticket so models can read them directly.
-
-```python
-# Star schema correction: drop orphans to enforce referential integrity
-import pandas as pd
-import numpy as np
-
-print("=== CORRECTING STAR SCHEMA REFERENTIAL INTEGRITY ===\n")
-
-# Reload cleaned/enriched state from previous cells or just work with tables
-clients = tables["dim_clients"].copy()
-travelers = tables["dim_travelers"].copy()
-suppliers = tables["dim_suppliers"].copy()
-bookings = tables["fact_bookings"].copy()
-tickets = tables["fact_support_tickets"].copy()
-
-# 1. Drop orphaned bookings
-bookings_old = len(bookings)
-bookings = bookings[
-    bookings["client_id"].isin(clients["client_id"])
-    & bookings["traveler_id"].isin(travelers["traveler_id"])
-    & bookings["supplier_id"].isin(suppliers["supplier_id"])
-]
-print(
-    "fact_bookings: dropped {} orphaned rows -> {} remaining (by client/traveler/supplier FKs)".format(
-        bookings_old - len(bookings), len(bookings)
-    )
-)
-
-# 2. Drop orphaned tickets
-tickets_old = len(tickets)
-bookings_valid_set = set(bookings["booking_id"])
-tickets = tickets[tickets["booking_id"].isin(bookings_valid_set)]
-print(
-    "fact_support_tickets: dropped {} orphaned rows -> {} remaining (by booking_id FK)".format(
-        tickets_old - len(tickets), len(tickets)
-    )
-)
-
-# 3. Optional: drop dimension rows that have no fact references (prevents bloat)
-clients_old = len(clients)
-clients = clients[
-    clients["client_id"].isin(bookings["client_id"])
-    | clients["client_id"].isin(tickets["client_id"])
-]
-print(
-    "dim_clients: kept {} of {} rows that appear in facts".format(
-        len(clients), clients_old
-    )
-)
-
-travelers_old = len(travelers)
-travelers = travelers[travelers["traveler_id"].isin(bookings["traveler_id"])]
-print(
-    "dim_travelers: kept {} of {} rows that appear in bookings".format(
-        len(travelers), travelers_old
-    )
-)
-
-suppliers_old = len(suppliers)
-suppliers = suppliers[suppliers["supplier_id"].isin(bookings["supplier_id"])]
-print(
-    "dim_suppliers: kept {} of {} rows that appear in bookings".format(
-        len(suppliers), suppliers_old
-    )
-)
-print()
-
-# 4. Verify after correction
-print("=== VERIFICATION AFTER CORRECTION ===")
-orph_bookings_client = bookings[~bookings["client_id"].isin(clients["client_id"])]
-orph_bookings_trav = bookings[~bookings["traveler_id"].isin(travelers["traveler_id"])]
-orph_bookings_sup = bookings[~bookings["supplier_id"].isin(suppliers["supplier_id"])]
-orph_tickets_book = tickets[~tickets["booking_id"].isin(bookings["booking_id"])]
-print(
-    "fact_bookings.client_id in dim_clients: {} orphaned [{}]".format(
-        len(orph_bookings_client), "PASS" if len(orph_bookings_client) == 0 else "FAIL"
-    )
-)
-print(
-    "fact_bookings.traveler_id in dim_travelers: {} orphaned [{}]".format(
-        len(orph_bookings_trav), "PASS" if len(orph_bookings_trav) == 0 else "FAIL"
-    )
-)
-print(
-    "fact_bookings.supplier_id in dim_suppliers: {} orphaned [{}]".format(
-        len(orph_bookings_sup), "PASS" if len(orph_bookings_sup) == 0 else "FAIL"
-    )
-)
-print(
-    "fact_support_tickets.booking_id in fact_bookings: {} orphaned [{}]".format(
-        len(orph_tickets_book), "PASS" if len(orph_tickets_book) == 0 else "FAIL"
-    )
-)
-print()
-
-# 5. PK checks
-print("=== PK UNIQUENESS ===")
-for name, df, pk in [
-    ("dim_clients", clients, "client_id"),
-    ("dim_travelers", travelers, "traveler_id"),
-    ("dim_suppliers", suppliers, "supplier_id"),
-    ("fact_bookings", bookings, "booking_id"),
-    ("fact_support_tickets", tickets, "ticket_id"),
-]:
-    ok = df[pk].nunique() == len(df) and not df[pk].duplicated().any()
-    print(
-        "  {:<24} {:<20} total={} unique={} [{}]".format(
-            name, pk, len(df), df[pk].nunique(), "PASS" if ok else "FAIL"
-        )
-    )
-
-# Store corrected tables
-tables["dim_clients"] = clients
-tables["dim_travelers"] = travelers
-tables["dim_suppliers"] = suppliers
-tables["fact_bookings"] = bookings
-tables["fact_support_tickets"] = tickets
-
-# Recreate denorm views
-# Suffixes stop pandas from renaming client_id when both sides carry it
-bookings_full = (
-    bookings.merge(clients, on="client_id", how="left", suffixes=("", "_dim_client"))
-    .merge(travelers, on="traveler_id", how="left", suffixes=("", "_dim_trav"))
-    .merge(suppliers, on="supplier_id", how="left", suffixes=("", "_dim_sup"))
-)
-tickets_full = tickets.merge(
-    bookings, on="booking_id", how="left", suffixes=("", "_fact_bk")
-).merge(clients, on="client_id", how="left", suffixes=("", "_dim_client"))
-tables["bookings_full"] = bookings_full
-tables["tickets_full"] = tickets_full
-
-print("\n=== FINAL STAR SCHEMA STATE ===")
-for label, df in [
-    ("dim_clients", clients),
-    ("dim_travelers", travelers),
-    ("dim_suppliers", suppliers),
-    ("fact_bookings", bookings),
-    ("fact_support_tickets", tickets),
-    ("bookings_full", bookings_full),
-    ("tickets_full", tickets_full),
-]:
-    print("  {:<24} shape={}".format(label, df.shape))
-
-print("\nAll referential integrity checks passed. Clean star schema finalized.")
-```
-
----
-
-## 7. Business Analysis
-
-**Bookings (5,528)**
-
-| Metric | Value |
-|---|---|
-| Total spend | about $7.8M (flights, hotels and car rental combined) |
-| Average booking | about $1,400 |
-| Policy compliance | 73.8% |
-| Cancellation rate | 17.1% (946 cancelled, 137 no-shows) |
-| Same-city trips | 36.3% |
-| Average booking lead time | 26.7 days |
-| Average trip length | 4.6 days |
-
-- **Top suppliers by revenue:** SUP-212 (about $290K), SUP-204 (about $288K), SUP-213 (about $278K)
-- **Top clients:** CLT-135 (156 bookings, $209K), CLT-123 (143, $205K), CLT-159 (135, $188K)
-- **Service mix:** flights about $5.05M (64%), hotels about $2.6M (33%), car rental about $0.19M (2%)
-
-**Support (2,263 tickets)**
-
-| Metric | Value |
-|---|---|
-| Escalation rate | 29.7% |
-| First reply within 4 hours | 72.6% |
-| Resolved within 24 hours | 63.5% |
-| Average CSAT | 3.18 / 5 |
-| Average resolution time | 25.0 hours |
-
-Complaints escalate most (about 47%) and score lowest on satisfaction (2.39 / 5).
-
----
-
-## 8. Exploratory Data Analysis
-
-**Policy compliance:** 73.8% of bookings follow policy and 26.2% don't. That is a moderate imbalance and workable for classification.
-
-**Cancellations:** about 1 in 5 bookings is cancelled or a no-show (17.1% cancelled plus 2.5% no-shows). A model that always predicts "active" would therefore score about 80% accuracy, so cancellation results must be read against recall, not accuracy alone.
-
-**What I checked:** service type, travel class, client tier and loyalty membership. Compliance moves only a little across client tiers (Gold 72.2%, Platinum 74.5%, Standard 74.9%), which hints that tier alone won't explain it.
-
-**Modelling readiness:** the tables have clean types, no missing values and full key coverage:
-
-| Dataset | Shape |
-|---|---|
-| Travelers | 1,150 rows |
-| `bookings_full` | 5,528 × 64 |
-| `tickets_full` | 2,263 × 52 |
-
-<img width="3968" height="2180" alt="eda_charts" src="https://github.com/user-attachments/assets/2583aa3f-0297-4fd2-a09e-b3ef0fc792b9" />
-
----
-
-## 9. Machine Learning
-
-Five models, one per business objective, each trained on a 75/25 train/test split and judged on the held-out 25%. The results are mixed, and I report them as they came out.
-
-| # | Objective | Model | Result on held-out data | Takeaway |
-|---|---|---|---|---|
-| 1 | Cancellation | Logistic Regression | 617 of 766 correct (80.5%), but only 2 of 147 cancellations caught | No better than always guessing "active" (80.8%). Not usable as built |
-| 2 | Trip cost | Linear Regression on log(amount) | Points follow the diagonal with wide scatter | Moderate fit. Understands the broad price level, misses the extremes |
-| 3 | Policy compliance drivers | Logistic Regression + permutation importance | Largest importance about 0.006 (under one percentage point of accuracy) | Essentially no signal. Compliance is not explained by these fields |
-| 4 | Support escalation | Logistic Regression | ROC AUC 0.77 | Useful ranking signal; clearly better than chance (0.50) |
-| 5 | Billing anomalies | Isolation Forest (contamination 0.02) | Flags the lowest-scoring 2% of invoices | Short audit list, saved as `detected_billing_anomalies.csv` |
-
-**Reading these results honestly**
-- **Objective 1:** cancellations are about 19% of bookings, so a model that predicts "active" every time scores about 81%. This one does almost the same and finds only 2 of 147 cancellations. Next steps are class weighting, a lower decision threshold and richer features. Judge it on recall and precision, not accuracy.
-- **Objective 2:** the model is trained on log(amount), so errors are in log units. It orders bookings sensibly but is not precise enough for client budgets yet. Service type and class dominate price, and a linear model struggles with that.
-- **Objective 3:** every importance score is tiny and several are negative, meaning shuffling that feature did not hurt (or slightly helped) the model. That is the signature of no learnable signal, and it is a finding in its own right: out-of-policy bookings are not predictable from these fields.
-- **Objective 4:** AUC 0.77 is decent, not strong. `csat_score` is an input, and it is only known after a ticket closes, so this model suits diagnosis rather than early warning.
-- **Objective 5:** the model has no labels, so "anomaly" means "unusual", not "wrong". Each flagged booking needs a human review.
-
-### Machine learning pipeline code
-
-One script trains all five models, saves one chart per objective and then combines them into `ml_all_objectives_validation_charts.png`.
-
-```python
-# Corporate Travel Management System: Machine Learning Pipeline
-# Five-objective ML pipeline: cancellations, cost forecast, compliance mapping,
-# support escalations, and billing anomaly audit.
-
-import os
-import warnings
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from sklearn.linear_model import LogisticRegression, LinearRegression
-from sklearn.ensemble import IsolationForest
-from sklearn.metrics import (
-    confusion_matrix,
-    ConfusionMatrixDisplay,
-    roc_curve,
-    auc,
-    mean_absolute_error,
-    r2_score,
-    accuracy_score,
-    classification_report,
-)
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
-from sklearn.inspection import permutation_importance
+DATA_DIR = "travel_mgmt_raw"
 
-warnings.filterwarnings("ignore")
-plt.style.use("seaborn-v0_8-whitegrid")
-sns.set_theme(style="whitegrid")
+dim_clients = pd.read_csv(f"{DATA_DIR}/dim_clients.csv")
+dim_clients.head(5)
 
-PROJECT_DIR = Path(__file__).resolve().parent
-RANDOM_STATE = 42
-np.random.seed(RANDOM_STATE)
+dim_suppliers = pd.read_csv(f"{DATA_DIR}/dim_suppliers.csv")
+dim_suppliers.head(5)
 
+dim_travelers = pd.read_csv(f"{DATA_DIR}/dim_travelers.csv")
+dim_travelers.head(5)
 
-def load_csv_safely(base_name: str) -> pd.DataFrame:
-    """Load a CSV, tolerating spaces vs. underscores in the filename."""
-    alt_name = (
-        base_name.replace("_", " ") if "_" in base_name else base_name.replace(" ", "_")
-    )
-    for candidate in (base_name, alt_name):
-        path = PROJECT_DIR / candidate
-        if path.exists():
-            return pd.read_csv(path)
-    raise FileNotFoundError(f"Could not locate {base_name} or {alt_name} in {PROJECT_DIR}")
+fact_bookings = pd.read_csv(f"{DATA_DIR}/fact_bookings.csv")
+fact_bookings.head(5)
 
-
-def clean_currency(series: pd.Series) -> pd.Series:
-    """Parse dirty currency strings such as '$1,250,000', '1.25M', 'USD 1,250,000'."""
-    s = series.astype(str).str.strip()
-    s = s.str.replace(r"^[^\d\.+-]*", "", regex=True)
-    s = s.str.replace(",", "", regex=False)
-    s = s.str.replace("M", "e6", case=False, regex=False)
-    s = s.str.replace("m", "e6", case=False, regex=False)
-    s = s.str.replace(r"[^0-9eE\.\+\-]", "", regex=True)
-    s = s.replace("", np.nan)
-    out = pd.to_numeric(s, errors="coerce")
-    out = out.where(out.isna() | (out < 1e6), out / 1e6)
-    return out
-
-
-def clean_boolean(series: pd.Series) -> pd.Series:
-    """Map Yes/Y/TRUE/1 variants to 1 and No/N/FALSE/0 variants to 0."""
-    s = series.astype(str).str.strip().str.lower()
-    true_vals = {"yes", "y", "true", "1", "t"}
-    false_vals = {"no", "n", "false", "0", "f"}
-    out = pd.Series(index=s.index, dtype="float")
-    out[s.isin(true_vals)] = 1.0
-    out[s.isin(false_vals)] = 0.0
-    return out
-
-
-def clean_tier(series: pd.Series) -> pd.Series:
-    """Map tier abbreviations (G/S/P) to full names."""
-    return (
-        series.astype(str)
-        .str.strip()
-        .str.title()
-        .replace({"G": "Gold", "S": "Standard", "P": "Platinum"})
-    )
-
-
-def clean_date(series: pd.Series) -> pd.Series:
-    return pd.to_datetime(series, errors="coerce", dayfirst=False)
-
-
-def load_and_prepare() -> dict:
-    """Load all star-schema tables and return cleaned DataFrames."""
-    clients = load_csv_safely("dim_clients.csv")
-    travelers = load_csv_safely("dim_travelers.csv")
-    suppliers = load_csv_safely("dim_suppliers.csv")
-    bookings = load_csv_safely("fact_bookings (1).csv")
-    tickets = load_csv_safely("fact_support_tickets.csv")
-
-    # --- Clean dimensions ---
-    clients["client_tier"] = clean_tier(clients["client_tier"])
-    clients["is_high_tier"] = clients["client_tier"].isin(["Gold", "Platinum"]).astype(int)
-    clients["annual_travel_budget_usd"] = clean_currency(clients["annual_travel_budget_usd"])
-    clients["has_travel_policy"] = clean_boolean(clients["has_travel_policy"])
-    clients["contract_start"] = clean_date(clients["contract_start"])
-    clients = clients.drop_duplicates(subset=["client_id"])
-
-    travelers["grade"] = travelers["grade"].astype(str).str.strip().str.title()
-    travelers["years_with_employer"] = pd.to_numeric(travelers["years_with_employer"], errors="coerce")
-    travelers["trips_last_year"] = pd.to_numeric(travelers["trips_last_year"], errors="coerce")
-    travelers["loyalty_member"] = clean_boolean(travelers["loyalty_member"])
-    travelers = travelers.drop_duplicates(subset=["traveler_id"])
-
-    suppliers["service_rating"] = pd.to_numeric(suppliers["service_rating"], errors="coerce")
-    suppliers["preferred_partner"] = clean_boolean(suppliers["preferred_partner"])
-    suppliers = suppliers.drop_duplicates(subset=["supplier_id"])
-
-    # --- Clean facts ---
-    bookings["amount_usd"] = clean_currency(bookings["amount_usd"])
-    bookings["policy_compliant"] = clean_boolean(bookings["policy_compliant"])
-    bookings["refund_usd"] = clean_currency(bookings["refund_usd"])
-    bookings["booking_date"] = clean_date(bookings["booking_date"])
-    bookings["travel_date"] = clean_date(bookings["travel_date"])
-    bookings["return_date"] = clean_date(bookings["return_date"])
-    bookings["is_cancelled"] = (
-        bookings["booking_status"].astype(str).str.strip().str.lower().isin(
-            {"cancelled", "canceled", "no-show", "no show"}
-        )
-    ).astype(int)
-    bookings = bookings.drop_duplicates(subset=["booking_id"])
-
-    tickets["escalated"] = clean_boolean(tickets["escalated"])
-    tickets["csat_score"] = pd.to_numeric(tickets["csat_score"], errors="coerce")
-    tickets["first_response_hours"] = pd.to_numeric(tickets["first_response_hours"], errors="coerce")
-    tickets["resolution_hours"] = pd.to_numeric(tickets["resolution_hours"], errors="coerce")
-    tickets["agent_notes_length"] = pd.to_numeric(tickets["agent_notes_length"], errors="coerce")
-    tickets["ticket_date"] = clean_date(tickets["ticket_date"])
-    tickets = tickets.drop_duplicates(subset=["ticket_id"])
-
-    return {
-        "clients": clients,
-        "travelers": travelers,
-        "suppliers": suppliers,
-        "bookings": bookings,
-        "tickets": tickets,
-    }
-
-
-def build_master_table(data: dict) -> pd.DataFrame:
-    """Join facts into dimensions to build the master evaluation table."""
-    bm = (
-        data["bookings"]
-        .merge(data["clients"], on="client_id", how="left", suffixes=("", "_client"))
-        .merge(data["travelers"], on="traveler_id", how="left", suffixes=("", "_traveler"))
-        .merge(data["suppliers"], on="supplier_id", how="left", suffixes=("", "_supplier"))
-    )
-    return bm
-
-
-# ---------------------------------------------------------------------------
-# Objective 1: Cancellation Classifier (Logistic Regression pipeline)
-# ---------------------------------------------------------------------------
-def objective_cancellation(data: dict, bm: pd.DataFrame):
-    print("Objective 1: Training Cancellation Classifier...")
-    df = bm.copy()
-    df["lead_days"] = (df["travel_date"] - df["booking_date"]).dt.days
-    df["trip_duration"] = (df["return_date"] - df["travel_date"]).dt.days
-
-    feature_cols = [
-        "amount_usd", "lead_days", "trip_duration",
-        "is_high_tier", "has_travel_policy", "years_with_employer",
-        "trips_last_year", "service_rating",
-    ]
-    cat_cols = ["service_type", "travel_class", "booking_channel"]
-
-    model_df = df[feature_cols + cat_cols + ["is_cancelled"]].dropna()
-    X = model_df[feature_cols + cat_cols]
-    y = model_df["is_cancelled"]
-
-    numeric_transformer = Pipeline(steps=[("scaler", StandardScaler())])
-    categorical_transformer = Pipeline(
-        steps=[("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False))]
-    )
-    preprocessor = ColumnTransformer(
-        transformers=[
-            ("num", numeric_transformer, feature_cols),
-            ("cat", categorical_transformer, cat_cols),
-        ]
-    )
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.25, random_state=RANDOM_STATE, stratify=y
-    )
-
-    clf = Pipeline(
-        steps=[
-            ("preprocessor", preprocessor),
-            ("classifier", LogisticRegression(max_iter=1000, random_state=RANDOM_STATE)),
-        ]
-    )
-    clf.fit(X_train, y_train)
-    y_pred = clf.predict(X_test)
-
-    cm = confusion_matrix(y_test, y_pred)
-    acc = accuracy_score(y_test, y_pred)
-    print(f"  Cancellation accuracy: {acc:.3f}")
-    print(classification_report(y_test, y_pred, zero_division=0))
-
-    fig, ax = plt.subplots(figsize=(5, 4))
-    ConfusionMatrixDisplay(
-        confusion_matrix=cm, display_labels=["Active", "Cancelled"]
-    ).plot(ax=ax, cmap="Blues", colorbar=False)
-    ax.set_title("Objective 1: Cancellation Confusion Matrix", fontweight="bold")
-    plt.tight_layout()
-    plt.savefig(PROJECT_DIR / "obj1_cancellation_matrix.png", dpi=200, bbox_inches="tight")
-    plt.close()
-    return clf, acc
-
-
-# ---------------------------------------------------------------------------
-# Objective 2: Cost Forecaster (log-scaled regression)
-# ---------------------------------------------------------------------------
-def objective_cost_forecast(data: dict, bm: pd.DataFrame):
-    print("Objective 2: Training Cost Forecaster...")
-    df = bm.copy()
-    df = df[df["amount_usd"] > 0].copy()
-    df["log_amount"] = np.log1p(df["amount_usd"])
-    df["lead_days"] = (df["travel_date"] - df["booking_date"]).dt.days
-
-    feature_cols = [
-        "lead_days",
-        "is_high_tier",
-        "has_travel_policy",
-        "years_with_employer",
-        "trips_last_year",
-        "service_rating",
-        "annual_travel_budget_usd",
-    ]
-    cat_cols = ["service_type", "travel_class", "booking_channel"]
-
-    model_df = df[feature_cols + cat_cols + ["log_amount"]].dropna()
-    X = model_df[feature_cols + cat_cols]
-    y = model_df["log_amount"]
-
-    numeric_transformer = Pipeline(steps=[("scaler", StandardScaler())])
-    categorical_transformer = Pipeline(
-        steps=[("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False))]
-    )
-    preprocessor = ColumnTransformer(
-        transformers=[
-            ("num", numeric_transformer, feature_cols),
-            ("cat", categorical_transformer, cat_cols),
-        ]
-    )
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.25, random_state=RANDOM_STATE
-    )
-
-    reg = Pipeline(
-        steps=[
-            ("preprocessor", preprocessor),
-            ("regressor", LinearRegression()),
-        ]
-    )
-    reg.fit(X_train, y_train)
-    y_pred = reg.predict(X_test)
-
-    mae = mean_absolute_error(y_test, y_pred)
-    r2 = r2_score(y_test, y_pred)
-    print(f"  Cost forecast MAE (log scale): {mae:.3f}, R^2: {r2:.3f}")
-
-    fig, ax = plt.subplots(figsize=(5, 4))
-    ax.scatter(y_test, y_pred, alpha=0.6, color="#228B22")
-    ax.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], "r--")
-    ax.set_xlabel("Actual Log Booking Fee")
-    ax.set_ylabel("Predicted Log Booking Fee")
-    ax.set_title("Objective 2: Cost Actual vs. Predicted", fontweight="bold")
-    plt.tight_layout()
-    plt.savefig(PROJECT_DIR / "obj2_cost_forecast.png", dpi=200, bbox_inches="tight")
-    plt.close()
-    return reg, r2
-
-
-# ---------------------------------------------------------------------------
-# Objective 3: Compliance Mapping (permutation importance)
-# ---------------------------------------------------------------------------
-def objective_compliance(data: dict, bm: pd.DataFrame):
-    print("Objective 3: Computing Compliance Feature Weights...")
-    df = bm.copy()
-    df["policy_compliant_num"] = df["policy_compliant"].fillna(0).astype(int)
-    df["lead_days"] = (df["travel_date"] - df["booking_date"]).dt.days
-
-    feature_cols = [
-        "amount_usd", "lead_days",
-        "is_high_tier", "has_travel_policy",
-        "years_with_employer", "trips_last_year",
-        "service_rating",
-    ]
-    cat_cols = ["service_type", "travel_class", "booking_channel"]
-
-    model_df = df[feature_cols + cat_cols + ["policy_compliant_num"]].dropna()
-    X = model_df[feature_cols + cat_cols]
-    y = model_df["policy_compliant_num"]
-
-    numeric_transformer = Pipeline(steps=[("scaler", StandardScaler())])
-    categorical_transformer = Pipeline(
-        steps=[("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False))]
-    )
-    preprocessor = ColumnTransformer(
-        transformers=[
-            ("num", numeric_transformer, feature_cols),
-            ("cat", categorical_transformer, cat_cols),
-        ]
-    )
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.25, random_state=RANDOM_STATE, stratify=y
-    )
-
-    clf = Pipeline(
-        steps=[
-            ("preprocessor", preprocessor),
-            ("classifier", LogisticRegression(max_iter=1000, random_state=RANDOM_STATE)),
-        ]
-    )
-    clf.fit(X_train, y_train)
-
-    result = permutation_importance(
-        clf, X_test, y_test, n_repeats=10, random_state=RANDOM_STATE, scoring="accuracy"
-    )
-    importance = pd.Series(result.importances_mean, index=X.columns).sort_values(ascending=False)
-    print("  Top compliance drivers:")
-    print(importance.to_string())
-
-    fig, ax = plt.subplots(figsize=(6, 4))
-    importance.plot(kind="barh", ax=ax, color="#4C72B0")
-    ax.invert_yaxis()
-    ax.set_xlabel("Permutation Importance Score")
-    ax.set_title("Objective 3: Policy Compliance Drivers", fontweight="bold")
-    plt.tight_layout()
-    plt.savefig(PROJECT_DIR / "obj3_compliance_weights.png", dpi=200, bbox_inches="tight")
-    plt.close()
-    return importance
-
-
-# ---------------------------------------------------------------------------
-# Objective 4: Support Escalations (ROC-AUC)
-# ---------------------------------------------------------------------------
-def objective_escalation(data: dict):
-    print("Objective 4: Training Support Escalation Model...")
-    df = data["tickets"].copy()
-    df = df.dropna(subset=["escalated"])
-
-    feature_cols = [
-        "first_response_hours", "resolution_hours", "csat_score",
-        "agent_notes_length",
-    ]
-    cat_cols = ["category", "priority", "contact_channel"]
-
-    model_df = df[feature_cols + cat_cols + ["escalated"]].dropna()
-    X = model_df[feature_cols + cat_cols]
-    y = model_df["escalated"].astype(int)
-
-    numeric_transformer = Pipeline(steps=[("scaler", StandardScaler())])
-    categorical_transformer = Pipeline(
-        steps=[("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False))]
-    )
-    preprocessor = ColumnTransformer(
-        transformers=[
-            ("num", numeric_transformer, feature_cols),
-            ("cat", categorical_transformer, cat_cols),
-        ]
-    )
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.25, random_state=RANDOM_STATE, stratify=y
-    )
-
-    clf = Pipeline(
-        steps=[
-            ("preprocessor", preprocessor),
-            ("classifier", LogisticRegression(max_iter=1000, random_state=RANDOM_STATE)),
-        ]
-    )
-    clf.fit(X_train, y_train)
-    y_score = clf.predict_proba(X_test)[:, 1]
-
-    fpr, tpr, _ = roc_curve(y_test, y_score)
-    roc_auc = auc(fpr, tpr)
-    print(f"  Escalation ROC-AUC: {roc_auc:.3f}")
-
-    fig, ax = plt.subplots(figsize=(5, 4))
-    ax.plot(fpr, tpr, color="#FF8C00", lw=2.5, label=f"AUC = {roc_auc:.2f}")
-    ax.plot([0, 1], [0, 1], color="gray", linestyle="--")
-    ax.set_xlabel("False Positive Rate")
-    ax.set_ylabel("True Positive Rate")
-    ax.set_title("Objective 4: Support Escalation ROC", fontweight="bold")
-    ax.legend(loc="lower right")
-    plt.tight_layout()
-    plt.savefig(PROJECT_DIR / "obj4_escalation_roc.png", dpi=200, bbox_inches="tight")
-    plt.close()
-    return clf, roc_auc
-
-
-# ---------------------------------------------------------------------------
-# Objective 5: Billing Anomaly Audit (Isolation Forest)
-# ---------------------------------------------------------------------------
-def objective_anomalies(data: dict, bm: pd.DataFrame):
-    print("Objective 5: Running Billing Anomaly Audit...")
-    df = bm.copy()
-    df = df[df["amount_usd"] > 0].copy()
-    df["lead_days"] = (df["travel_date"] - df["booking_date"]).dt.days
-
-    feature_cols = ["amount_usd", "lead_days", "service_rating", "years_with_employer"]
-    model_df = df[feature_cols].dropna()
-    X = model_df[feature_cols]
-
-    iso = IsolationForest(contamination=0.02, random_state=RANDOM_STATE, n_estimators=200)
-    iso.fit(X)
-    scores = iso.decision_function(X)
-    preds = iso.predict(X)  # -1 = anomaly, 1 = normal
-    anomaly_rate = (preds == -1).mean()
-    print(f"  Billing anomalies flagged: {anomaly_rate:.2%} of invoices")
-
-    # Attach results back for export
-    model_df = model_df.copy()
-    model_df["anomaly_score"] = scores
-    model_df["is_anomaly"] = (preds == -1).astype(int)
-    anomalies = model_df[model_df["is_anomaly"] == 1]
-    anomalies.to_csv(PROJECT_DIR / "detected_billing_anomalies.csv", index=False)
-
-    fig, ax = plt.subplots(figsize=(5, 4))
-    sns.histplot(scores, bins=45, ax=ax, color="#DC143C", kde=True)
-    ax.axvline(x=np.percentile(scores, 2), color="black", linestyle="--", label="Audit Threshold (2%)")
-    ax.set_xlabel("Isolation Forest Anomaly Score")
-    ax.set_title("Objective 5: Billing Anomaly Scores", fontweight="bold")
-    ax.legend()
-    plt.tight_layout()
-    plt.savefig(PROJECT_DIR / "obj5_billing_anomalies.png", dpi=200, bbox_inches="tight")
-    plt.close()
-    return iso, anomaly_rate
-
-
-# ---------------------------------------------------------------------------
-# Master validation figure: stitches the five real objective charts into one dashboard
-# ---------------------------------------------------------------------------
-def export_master_figure(data=None):
-    import matplotlib.image as mpimg
-    print("Compiling 5-objective validation dashboard...")
-    files = ["obj1_cancellation_matrix.png", "obj2_cost_forecast.png",
-             "obj3_compliance_weights.png", "obj4_escalation_roc.png",
-             "obj5_billing_anomalies.png"]
-    fig, axes = plt.subplots(2, 3, figsize=(18, 11))
-    for ax, f in zip(axes.flatten(), files):
-        ax.imshow(mpimg.imread(PROJECT_DIR / f))
-        ax.axis("off")
-    axes.flatten()[5].axis("off")
-    plt.tight_layout()
-    plt.savefig(PROJECT_DIR / "ml_all_objectives_validation_charts.png", dpi=200, bbox_inches="tight")
-    plt.close()
-    print("-> Exported 'ml_all_objectives_validation_charts.png'")
-
-
-def main():
-    print("Initializing TMC ML pipeline...")
-    data = load_and_prepare()
-    print(f"-> Loaded {len(data['bookings'])} bookings, {len(data['tickets'])} tickets, {len(data['clients'])} clients")
-    bm = build_master_table(data)
-
-    objective_cancellation(data, bm)
-    objective_cost_forecast(data, bm)
-    objective_compliance(data, bm)
-    objective_escalation(data)
-    objective_anomalies(data, bm)
-    export_master_figure(data)
-
-    print("[DONE] TMC ML pipeline complete. Model artifacts and charts exported.")
-
-
-if __name__ == "__main__":
-    main()
+fact_support_tickets = pd.read_csv(f"{DATA_DIR}/fact_support_tickets.csv")
+fact_support_tickets.head(5)
 ```
 
 ---
 
-## 10. Data Visualization & Interpretation
+## 3. Data Dictionary
 
-Two sets of charts: one for the five business objectives, one for the machine learning work.
+Every column, what it means and the problems known to be hiding in it.
 
-### Business objective charts
+**`dim_clients`**
 
-<img width="3979" height="2178" alt="business_objective_charts" src="https://github.com/user-attachments/assets/9efd52c0-f7db-4db8-b670-efc806a48b1d" />
+| Column                   | Type       | Description                                                         | Known data issues                             |
+|:-------------------------|:-----------|:--------------------------------------------------------------------|:----------------------------------------------|
+| client_id                | Text (key) | Unique client code, CLT-###                                         | Duplicate rows, lower case in other tables    |
+| client_name              | Text       | Corporate client name                                               | Extra spaces, mixed case                      |
+| country                  | Text       | Client head office country                                          | Spelling variants (UK, KSA, RSA...)           |
+| industry                 | Text       | Banking, Oil and Gas, Technology, Pharma, Consulting, Manufacturing | Mixed case, spaces                            |
+| client_tier              | Text       | Standard, Gold or Platinum service tier                             | Upper/lower case, single letters (S/G/P)      |
+| contract_start           | Date       | Date the client signed                                              | Six date styles, junk dates                   |
+| annual_travel_budget_usd | Currency   | Yearly travel budget in USD                                         | Text such as 1.25M, $1,250,000, USD 1,250,000 |
+| has_travel_policy        | Boolean    | Client has a written travel policy                                  | Yes/Y/TRUE/1 and No/N/FALSE/0                 |
 
-| # | Chart | What it shows | What it means |
-|---|---|---|---|
-| 1 | Top 10 suppliers by revenue | SUP-212 leads at about $290K, SUP-204 follows at about $288K, and the tenth supplier (SUP-215) still earns about $255K | Revenue is spread very evenly: the gap between first and tenth is only about 12%, so no single supplier dominates |
-| 2 | Policy compliance by client tier | Every tier sits between about 72% and 75% (185 bookings, about 3%, belong to clients with no recognisable tier and are left out). Standard about 75%, Platinum about 74.5%, Gold about 72% | Tier doesn't explain compliance; the problem is spread across tiers |
-| 3 | Escalation rate by ticket category | Complaint about 47%, Emergency Rebooking about 31%, Itinerary Change, Visa or Document Query and Refund Request about 26%, Billing Dispute about 23% | Complaints escalate at twice the rate of billing disputes, and emergency rebookings are the clear second risk |
-| 4 | Revenue by service type | Flights about $5.05M (64%), hotels about $2.6M (33%), car rental about $0.19M (2%) | Flights and hotels carry almost the whole business |
-| 5 | Average spend by travel class | First about $5,300, Business about $2,750, Suite about $1,950, Premium Economy about $1,450, down to Luxury car about $450 and SUV about $350 | Premium cabins cost many times more than economy. Classes belong to different services, so compare within a service |
+**`dim_travelers`**
 
-**Business chart code** (run after the cleaning, feature engineering and star schema cells):
+| Column              | Type       | Description                           | Known data issues      |
+|:--------------------|:-----------|:--------------------------------------|:-----------------------|
+| traveler_id         | Text (key) | Unique traveler code, TRV-####        | Duplicate rows         |
+| client_id           | Text (FK)  | Links to dim_clients                  | Orphan codes           |
+| grade               | Text       | Staff, Manager, Director or Executive | Mixed case, spaces     |
+| home_country        | Text       | Traveler base country                 | Spelling variants      |
+| years_with_employer | Integer    | Years at the client company           | Negatives, 99-200, N/A |
+| loyalty_member      | Boolean    | Member of a travel loyalty programme  | Yes/Y/TRUE/1 variants  |
+| trips_last_year     | Integer    | Trips taken last year                 | Missing values         |
+
+**`dim_suppliers`**
+
+| Column                   | Type        | Description                               | Known data issues              |
+|:-------------------------|:------------|:------------------------------------------|:-------------------------------|
+| supplier_id              | Text (key)  | Unique supplier code, SUP-###             | Duplicate rows                 |
+| supplier_name            | Text        | Airline, hotel or car rental company      | Extra spaces, mixed case       |
+| supplier_type            | Text        | Airline, Hotel or Car Rental              | Mixed case, spaces             |
+| country                  | Text        | Supplier base country                     | Spelling variants              |
+| preferred_partner        | Boolean     | Negotiated preferred supplier             | Yes/Y/TRUE/1 variants          |
+| service_rating           | Decimal 1-5 | Company rating of service quality         | Text like '4/5', 'four', 'N/A' |
+| cancellation_flexibility | Text        | Flexible, Semi-Flexible or Non-Refundable | Case, hyphen variants          |
+
+**`fact_bookings`**
+
+| Column           | Type       | Description                                                                         | Known data issues                                             |
+|:-----------------|:-----------|:------------------------------------------------------------------------------------|:--------------------------------------------------------------|
+| booking_id       | Text (key) | Unique booking code, BKG-######                                                     | Duplicate rows                                                |
+| client_id        | Text (FK)  | Links to dim_clients                                                                | Some in lower case                                            |
+| traveler_id      | Text (FK)  | Links to dim_travelers                                                              | Orphan codes                                                  |
+| supplier_id      | Text (FK)  | Links to dim_suppliers                                                              | Missing values                                                |
+| service_type     | Text       | Flight, Hotel or Car Rental                                                         | Mixed case, spaces                                            |
+| travel_class     | Text       | Cabin or room/vehicle class (Economy...First, Standard...Suite, Economy/SUV/Luxury) | Mixed case, spaces                                            |
+| booking_channel  | Text       | Online Tool, Mobile App, Travel Agent or Phone                                      | Case, spaces removed                                          |
+| origin_city      | Text       | Trip origin                                                                         | Variants: NYC, LON, DXB, Bombay, São Paulo...                 |
+| destination_city | Text       | Trip destination                                                                    | City-name and airport-code variants                           |
+| booking_date     | Date       | Date the booking was made                                                           | Six date styles, junk dates                                   |
+| travel_date      | Date       | Start of travel or stay                                                             | Six date styles; swapped with return_date in some rows        |
+| return_date      | Date       | End of travel or stay                                                               | Mixed formats                                                 |
+| amount_usd       | Currency   | Booking value in USD                                                                | Text with symbols, zero/negative values, planted price spikes |
+| policy_compliant | Boolean    | Booking follows the client travel policy                                            | Yes/Y/TRUE/1 variants                                         |
+| booking_status   | Text       | Completed, Cancelled or No-show                                                     | Case, 'Canceled', 'No show'                                   |
+| refund_usd       | Currency   | Refund paid on cancellation (LEAKAGE for Objective 1)                               | Text with symbols                                             |
+
+**`fact_support_tickets`**
+
+| Column               | Type        | Description                                                                                               | Known data issues                       |
+|:---------------------|:------------|:----------------------------------------------------------------------------------------------------------|:----------------------------------------|
+| ticket_id            | Text (key)  | Unique ticket code, TKT-######                                                                            | Duplicate rows                          |
+| booking_id           | Text (FK)   | Links to fact_bookings                                                                                    | Orphan codes                            |
+| client_id            | Text (FK)   | Links to dim_clients                                                                                      | Missing values                          |
+| ticket_date          | Date        | Date the ticket was opened                                                                                | Six date styles                         |
+| category             | Text        | Refund Request, Itinerary Change, Visa or Document Query, Billing Dispute, Complaint, Emergency Rebooking | Mixed case, spaces                      |
+| priority             | Text        | Low, Medium, High or Critical                                                                             | Mixed case, spaces                      |
+| contact_channel      | Text        | Email, Phone, Chat or Portal                                                                              | Mixed case, spaces                      |
+| first_response_hours | Decimal     | Hours until first reply                                                                                   | Text like '2 hrs', '1h', negatives, N/A |
+| resolution_hours     | Decimal     | Hours until ticket closed                                                                                 | Negatives, 0, 9999                      |
+| escalated            | Boolean     | Ticket escalated to a manager                                                                             | Yes/Y/TRUE/1 variants                   |
+| csat_score           | Integer 1-5 | Customer satisfaction after closure (target for Objective 4)                                              | Blank, 'no response', 0, 6, 9, 10       |
+| agent_notes_length   | Integer     | Characters in agent notes                                                                                 | -                                       |
+
+---
+
+## 4. Data Quality Audit
+
+Before touching anything I counted the problems. The audit checks duplicates, missing keys, missing values, impossible values (a CSAT score of 9, a resolution time of 9999 hours), unreadable dates and broken links between tables.
+
+**Table overview**
+
+| table | rows | columns | duplicate_rows | missing_key | duplicate_key_rows | missing_cells |
+| --- | --- | --- | --- | --- | --- | --- |
+| tickets | 2530 | 12 | 30 | 0 | 60 | 28 |
+| bookings | 6060 | 16 | 60 | 0 | 120 | 42 |
+| clients | 64 | 8 | 4 | 0 | 8 | 0 |
+
+**Missing values**
+
+| table | column | missing |
+| --- | --- | --- |
+| tickets | client_id | 20 |
+| tickets | first_response_hours | 8 |
+| bookings | supplier_id | 42 |
+
+**Rule checks on support tickets**
+
+| check | rows |
+| --- | --- |
+| CSAT nonnumeric | 60 |
+| CSAT outside 1-5 | 10 |
+| First response missing | 8 |
+| First response nonnumeric / negative | 7 |
+| Resolution nonnumeric / negative | 4 |
+| Resolution zero or >=9999 | 8 |
+| Unparsed ticket dates | 24 |
+
+**Broken links between tables**
+
+| relationship | nonmissing_keys | orphan_keys |
+| --- | --- | --- |
+| tickets.booking_id -> bookings.booking_id | 2530 | 25 |
+| tickets.client_id -> clients.client_id | 2510 | 0 |
+| bookings.client_id -> clients.client_id | 6060 | 0 |
+
+**What stands out**
+
+- Duplicates are real: 30 tickets, 60 bookings and 4 clients appear twice.
+- 60 CSAT scores are the text "no response" and 10 more fall outside 1 to 5. Those tickets cannot be used as labels.
+- 25 tickets point to a booking that does not exist, and 42 bookings have no supplier.
+- 24 ticket dates cannot be read.
+
+### Full code
 
 ```python
-# Business objective charts - run AFTER the cleaning, feature engineering and star schema cells
-import matplotlib.pyplot as plt
-import pandas as pd
+audit_tables = {
+    "tickets": (fact_support_tickets, "ticket_id"),
+    "bookings": (fact_bookings, "booking_id"),
+    "clients": (dim_clients, "client_id"),
+}
 
-bk = bookings_full.copy()
-tk = tickets_full.copy()
+overview = pd.DataFrame([
+    {
+        "table": name,
+        "rows": len(frame),
+        "columns": len(frame.columns),
+        "duplicate_rows": int(frame.duplicated().sum()),
+        "missing_key": int(frame[key].isna().sum()),
+        "duplicate_key_rows": int(frame[key].duplicated(keep=False).sum()),
+        "missing_cells": int(frame.isna().sum().sum()),
+    }
+    for name, (frame, key) in audit_tables.items()
+]).set_index("table")
 
-# Safety net: map every label variant (case, spacing, abbreviations) to one canonical label.
-# Anything that does not match a known label becomes missing and is left out of the chart.
-def canon_labels(series, valid, extra=None):
-    lookup = {v.lower(): v for v in valid}
-    lookup.update({k.lower(): v for k, v in (extra or {}).items()})
-    return series.astype(str).str.strip().str.lower().map(lookup)
+missing = pd.DataFrame([
+    {"table": name, "column": column, "missing": int(count)}
+    for name, (frame, _) in audit_tables.items()
+    for column, count in frame.isna().sum().items()
+    if count
+])
 
-SERVICES = ["Flight", "Hotel", "Car Rental"]
-TIERS = ["Gold", "Platinum", "Standard"]
-CATEGORIES = ["Complaint", "Emergency Rebooking", "Visa or Document Query",
-              "Itinerary Change", "Refund Request", "Billing Dispute"]
-CLASSES = ["First", "Business", "Premium Economy", "Economy",
-           "Suite", "Superior", "Standard", "Luxury", "SUV"]
+tickets = fact_support_tickets
+csat = pd.to_numeric(tickets["csat_score"], errors="coerce")
+response = pd.to_numeric(tickets["first_response_hours"], errors="coerce")
+resolution = pd.to_numeric(tickets["resolution_hours"], errors="coerce")
 
-bk["service_type"] = canon_labels(bk["service_type"], SERVICES)
-bk["client_tier"] = canon_labels(bk["client_tier"], TIERS, {"G": "Gold", "S": "Standard", "P": "Platinum"})
-bk["travel_class"] = canon_labels(bk["travel_class"], CLASSES)
-tk["category"] = canon_labels(tk["category"], CATEGORIES)
+csat_present = (
+    tickets["csat_score"].notna()
+    & tickets["csat_score"].astype(str).str.strip().ne("")
+)
+response_present = (
+    tickets["first_response_hours"].notna()
+    & tickets["first_response_hours"].astype(str).str.strip().ne("")
+)
+resolution_present = (
+    tickets["resolution_hours"].notna()
+    & tickets["resolution_hours"].astype(str).str.strip().ne("")
+)
 
-plt.style.use("seaborn-v0_8-whitegrid")
-fig, axes = plt.subplots(2, 3, figsize=(20, 11))
+rules = pd.DataFrame([
+    ("CSAT nonnumeric", int((csat_present & csat.isna()).sum())),
+    ("CSAT outside 1-5", int((csat.notna() & ~csat.between(1, 5)).sum())),
+    ("First response missing", int(tickets["first_response_hours"].isna().sum())),
+    (
+        "First response nonnumeric / negative",
+        int((response_present & response.isna()).sum() + response.lt(0).sum()),
+    ),
+    (
+        "Resolution nonnumeric / negative",
+        int((resolution_present & resolution.isna()).sum() + resolution.lt(0).sum()),
+    ),
+    (
+        "Resolution zero or >=9999",
+        int((resolution.eq(0) | resolution.ge(9999)).sum()),
+    ),
+    (
+        "Unparsed ticket dates",
+        int(tickets["ticket_date"].map(
+            lambda value: pd.isna(
+                pd.to_datetime(value, format="mixed", errors="coerce")
+            )
+        ).sum()),
+    ),
+], columns=["check", "rows"])
 
-# 1. Top 10 suppliers by revenue
-bk.groupby("supplier_id")["amount_usd"].sum().sort_values(ascending=False).head(10).plot(
-    kind="bar", ax=axes[0, 0], color="steelblue")
-axes[0, 0].set(title="1. Top 10 Suppliers by Total Revenue", xlabel="Supplier ID", ylabel="Total Revenue (USD)")
-axes[0, 0].tick_params(axis="x", rotation=45)
+normalize_id = lambda values: (
+    values.astype("string").str.strip().str.upper()
+)
 
-# 2. Policy compliance by client tier
-bk.groupby("client_tier")["is_policy_compliant"].mean().sort_values(ascending=False).plot(
-    kind="bar", ax=axes[0, 1], color="forestgreen")
-axes[0, 1].set(title="2. Policy Compliance Rate by Client Tier", xlabel="Client Tier",
-               ylabel="Compliance Rate", ylim=(0, 1))
-axes[0, 1].tick_params(axis="x", rotation=0)
+client_ids = set(normalize_id(dim_clients["client_id"].dropna()))
+booking_ids = set(normalize_id(fact_bookings["booking_id"].dropna()))
 
-# 3. Escalation rate by ticket category
-tk.groupby("category")["is_escalated"].mean().sort_values().plot(
-    kind="barh", ax=axes[0, 2], color="crimson")
-axes[0, 2].set(title="3. Escalation Rate by Ticket Category", xlabel="Escalation Rate", ylabel="Ticket Category")
+relationships = pd.DataFrame([
+    (
+        "tickets.booking_id -> bookings.booking_id",
+        int(tickets["booking_id"].notna().sum()),
+        int((
+            ~normalize_id(tickets["booking_id"].dropna()).isin(booking_ids)
+        ).sum()),
+    ),
+    (
+        "tickets.client_id -> clients.client_id",
+        int(tickets["client_id"].notna().sum()),
+        int((
+            ~normalize_id(tickets["client_id"].dropna()).isin(client_ids)
+        ).sum()),
+    ),
+    (
+        "bookings.client_id -> clients.client_id",
+        int(fact_bookings["client_id"].notna().sum()),
+        int((
+            ~normalize_id(fact_bookings["client_id"].dropna()).isin(client_ids)
+        ).sum()),
+    ),
+], columns=["relationship", "nonmissing_keys", "orphan_keys"])
 
-# 4. Revenue by service type
-bk.groupby("service_type")["amount_usd"].sum().sort_values(ascending=False).plot(
-    kind="bar", ax=axes[1, 0], color="darkorange")
-axes[1, 0].set(title="4. Revenue by Service Type", xlabel="Service Type", ylabel="Total Revenue (USD)")
-axes[1, 0].tick_params(axis="x", rotation=0)
-
-# 5. Average spend by travel class
-bk.groupby("travel_class")["amount_usd"].mean().sort_values(ascending=False).plot(
-    kind="bar", ax=axes[1, 1], color="slateblue")
-axes[1, 1].set(title="5. Average Booking Spend by Travel Class", xlabel="Travel Class", ylabel="Average Spend (USD)")
-axes[1, 1].tick_params(axis="x", rotation=45)
-
-axes[1, 2].axis("off")
-plt.tight_layout()
-plt.savefig("business_objective_charts.png", dpi=200, bbox_inches="tight")
-plt.show()
-
-# Quick check: each list below should show only the canonical labels
-for name, col in [("Service types", bk["service_type"]), ("Client tiers", bk["client_tier"]),
-                  ("Travel classes", bk["travel_class"]), ("Ticket categories", tk["category"])]:
-    print(f"{name}: {sorted(col.dropna().unique())}  (unmatched rows: {int(col.isna().sum())})")
+display(overview)
+display(missing)
+display(rules)
+display(relationships)
+display(
+    tickets["csat_score"]
+    .value_counts(dropna=False)
+    .rename_axis("csat_score")
+    .to_frame("rows")
+)
 ```
 
-### Machine learning charts
+---
 
-<img width="3580" height="2180" alt="ml_all_objectives_validation_charts" src="https://github.com/user-attachments/assets/84e32985-a78d-44ce-927b-112050708df2" />
+## 5. Data Cleaning and Error Checking
 
-The five panels, read in order:
+Cleaning keeps the raw files untouched and writes clean copies to `travel_mgmt_clean/`. Every fix is followed by a check that counts what is still wrong.
 
-**Objective 1: Cancellation confusion matrix.** Of 619 active bookings, 615 were predicted active and 4 wrongly flagged. Of 147 real cancellations, 145 were predicted active and only 2 were caught. Accuracy is 80.5%, almost identical to the 80.8% a "never cancelled" guess would give. **Meaning:** the model has learned to say "active" almost every time. It needs class balancing before it is of any use.
+- **IDs** trimmed and upper-cased so `bkg-300001 ` and `BKG-300001` match.
+- **Duplicates** removed on the key, keeping the first record.
+- **Text columns** trimmed, collapsed and lower-cased. Tier shortcuts (`G`, `S`, `P`) expanded to gold, standard and platinum.
+- **CSAT** kept only when it is a whole number from 1 to 5.
+- **Hours** parsed from strings such as `2 hrs`; negative values dropped; resolution times of 0 or 9999 and above treated as missing.
+- **Dates** parsed in mixed formats, month first when ambiguous.
+- **Yes/No fields** converted to true booleans.
 
-**Objective 2: Cost, actual vs predicted (log scale).** Points follow the red diagonal from about 5 to 8.5 but with wide scatter, and they sit in horizontal bands because service type and class set the price level. Low-fee bookings (actual 4 to 5) are over-predicted at about 5.2, and the most expensive ones (actual 8 to 10) are under-predicted at about 7 to 8. **Meaning:** the model captures the broad price level but not the extremes. A tree-based model or per-service models would likely do better.
+**Rows before and after**
 
-**Objective 3: Policy compliance drivers.** `booking_channel` (about 0.006) and `travel_class` (about 0.006) rank first, followed by `service_type`, `has_travel_policy` and `years_with_employer`. `lead_days`, `amount_usd` and `is_high_tier` are negative. **Meaning:** the top score moves accuracy by well under one percentage point, so none of these is a real driver. Compliance is not predictable from the available fields, and booking channel and travel class are the first places to look for better data.
+| table | raw_rows | clean_rows | duplicate_rows_removed |
+| --- | --- | --- | --- |
+| tickets | 2530 | 2500 | 30 |
+| bookings | 6060 | 6000 | 60 |
+| clients | 64 | 60 | 4 |
 
-**Objective 4: Support escalation ROC.** The curve bows well above the diagonal, with AUC 0.77. At roughly a 20% false-positive rate the model catches about 60% of escalating tickets. **Meaning:** a random escalating ticket is ranked above a random non-escalating one about 77% of the time, which is good enough to prioritise a queue but not to automate decisions.
+**What is still missing after cleaning**
 
-**Objective 5: Billing anomaly scores.** Scores are left-skewed, with most bookings between 0.10 and 0.22 and a thin tail running below zero. The dashed line marks the 2% audit threshold near zero. **Meaning:** a small, clearly separated group of bookings sits far from the rest. They are the audit candidates, and each still needs a human check.
+| check | rows |
+| --- | --- |
+| Ticket CSAT missing or invalid after 1-5 validation | 70 |
+| Ticket dates missing or unparseable | 24 |
+| First response hours missing or invalid | 11 |
+| Resolution hours missing or invalid | 12 |
+| Unrecognized ticket escalation values | 0 |
+| Unrecognized client travel-policy values | 0 |
+
+The leftovers are real gaps, not formatting problems. They are handled later by imputation inside the model pipelines, so no row is guessed at here.
+
+### Full code
+
+```python
+from pathlib import Path
+
+# Keep the raw DataFrames unchanged.
+tickets_clean = fact_support_tickets.copy()
+bookings_clean = fact_bookings.copy()
+clients_clean = dim_clients.copy()
+
+def normalize_text(series):
+    """Trim whitespace, collapse repeated spaces, and normalize case."""
+    return (
+        series.astype("string")
+        .str.strip()
+        .str.replace(r"\s+", " ", regex=True)
+        .str.casefold()
+    )
+
+def normalize_ids(frame, columns):
+    """Standardize ID values without changing missing values."""
+    for column in columns:
+        frame[column] = (
+            frame[column]
+            .astype("string")
+            .str.strip()
+            .str.upper()
+        )
+
+def parse_hour_values(series):
+    """Parse numbers and simple hour strings such as '2 hrs' or '1h'."""
+    numeric_text = series.astype("string").str.extract(
+        r"(?i)^\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))\s*"
+        r"(?:h|hr|hrs|hours?)?\s*$",
+        expand=False,
+    )
+    return pd.to_numeric(numeric_text, errors="coerce")
+
+def parse_boolean(series):
+    """Convert common yes/no representations to nullable booleans."""
+    mapping = {
+        "yes": True,
+        "y": True,
+        "true": True,
+        "1": True,
+        "no": False,
+        "n": False,
+        "false": False,
+        "0": False,
+    }
+    normalized = normalize_text(series)
+    parsed = normalized.map(mapping).astype("boolean")
+    invalid = normalized.notna() & parsed.isna()
+    return parsed, invalid
+
+# Standardize identifiers before removing duplicate records.
+normalize_ids(tickets_clean, ["ticket_id", "booking_id", "client_id"])
+normalize_ids(
+    bookings_clean,
+    ["booking_id", "client_id", "traveler_id", "supplier_id"],
+)
+normalize_ids(clients_clean, ["client_id"])
+
+# These repeated keys were exact duplicate records in the audit.
+tickets_raw_rows = len(tickets_clean)
+bookings_raw_rows = len(bookings_clean)
+clients_raw_rows = len(clients_clean)
+
+tickets_clean = tickets_clean.drop_duplicates(
+    subset="ticket_id", keep="first"
+).copy()
+bookings_clean = bookings_clean.drop_duplicates(
+    subset="booking_id", keep="first"
+).copy()
+clients_clean = clients_clean.drop_duplicates(
+    subset="client_id", keep="first"
+).copy()
+
+# Normalize categories used for ticket analysis and the related booking/client data.
+for frame, columns in [
+    (
+        tickets_clean,
+        ["category", "priority", "contact_channel"],
+    ),
+    (bookings_clean, ["service_type"]),
+    (clients_clean, ["client_tier"]),
+]:
+    for column in columns:
+        frame[column] = normalize_text(frame[column])
+
+# Standardize client tier abbreviations.
+clients_clean["client_tier"] = clients_clean["client_tier"].replace(
+    {"s": "standard", "g": "gold", "p": "platinum"}
+)
+
+# Parse ticket dates. Ambiguous numeric dates are interpreted month-first.
+tickets_clean["ticket_date"] = pd.to_datetime(
+    tickets_clean["ticket_date"],
+    format="mixed",
+    dayfirst=False,
+    errors="coerce",
+)
+
+# Keep CSAT only when it is an integer rating from 1 through 5.
+csat_numeric = pd.to_numeric(tickets_clean["csat_score"], errors="coerce")
+valid_csat = csat_numeric.between(1, 5) & csat_numeric.mod(1).eq(0)
+tickets_clean["csat_score"] = csat_numeric.where(valid_csat).astype("Int64")
+
+# Parse response times; retain zero as a valid immediate response.
+tickets_clean["first_response_hours"] = parse_hour_values(
+    tickets_clean["first_response_hours"]
+)
+tickets_clean.loc[
+    tickets_clean["first_response_hours"] < 0,
+    "first_response_hours",
+] = pd.NA
+
+# Resolution time is retained for data completeness, but is post-resolution
+# information and must not be used as a pre-resolution model predictor.
+tickets_clean["resolution_hours"] = pd.to_numeric(
+    tickets_clean["resolution_hours"],
+    errors="coerce",
+)
+invalid_resolution = (
+    (tickets_clean["resolution_hours"] <= 0)
+    | (tickets_clean["resolution_hours"] >= 9999)
+)
+tickets_clean.loc[invalid_resolution, "resolution_hours"] = pd.NA
+
+# Normalize boolean fields and track any values that could not be interpreted.
+tickets_clean["escalated"], invalid_escalated = parse_boolean(
+    tickets_clean["escalated"]
+)
+clients_clean["has_travel_policy"], invalid_client_policy = parse_boolean(
+    clients_clean["has_travel_policy"]
+)
+
+# Summarize the cleaning results.
+cleaning_summary = pd.DataFrame([
+    {
+        "table": "tickets",
+        "raw_rows": tickets_raw_rows,
+        "clean_rows": len(tickets_clean),
+        "duplicate_rows_removed": tickets_raw_rows - len(tickets_clean),
+    },
+    {
+        "table": "bookings",
+        "raw_rows": bookings_raw_rows,
+        "clean_rows": len(bookings_clean),
+        "duplicate_rows_removed": bookings_raw_rows - len(bookings_clean),
+    },
+    {
+        "table": "clients",
+        "raw_rows": clients_raw_rows,
+        "clean_rows": len(clients_clean),
+        "duplicate_rows_removed": clients_raw_rows - len(clients_clean),
+    },
+])
+
+cleaning_issues = pd.DataFrame([
+    ("Ticket CSAT missing or invalid after 1-5 validation",
+     int(tickets_clean["csat_score"].isna().sum())),
+    ("Ticket dates missing or unparseable",
+     int(tickets_clean["ticket_date"].isna().sum())),
+    ("First response hours missing or invalid",
+     int(tickets_clean["first_response_hours"].isna().sum())),
+    ("Resolution hours missing or invalid",
+     int(tickets_clean["resolution_hours"].isna().sum())),
+    ("Unrecognized ticket escalation values",
+     int(invalid_escalated.sum())),
+    ("Unrecognized client travel-policy values",
+     int(invalid_client_policy.sum())),
+], columns=["check", "rows"])
+
+display(cleaning_summary)
+display(cleaning_issues)
+
+# Save cleaned copies separately; the original raw CSVs are not overwritten.
+CLEAN_DIR = Path("travel_mgmt_clean")
+CLEAN_DIR.mkdir(parents=True, exist_ok=True)
+
+tickets_clean.to_csv(CLEAN_DIR / "fact_support_tickets.csv", index=False)
+bookings_clean.to_csv(CLEAN_DIR / "fact_bookings.csv", index=False)
+clients_clean.to_csv(CLEAN_DIR / "dim_clients.csv", index=False)
+
+print("Cleaned datasets saved to:", CLEAN_DIR.resolve())
+```
 
 ---
 
-## 11. Validation and Quality Assurance
+## 6. Feature Engineering
 
-| Check | Outcome |
-|---|---|
-| Primary keys unique in every table | Passed |
-| Foreign keys all resolve to a parent record | Passed, orphans removed |
-| Duplicates | Removed in every table |
-| Missing values after cleaning | 0 in every table |
-| All six date formats parsed, travel dates in order | Passed |
-| Numeric text converted | Passed |
-| Booleans standardised | Passed |
-| Country, city and client tier variants merged | Passed |
-| Impossible amounts, scores and durations | Replaced with group medians |
-| Denormalised views keep `client_id` | Passed (5,528 × 64 and 2,263 × 52) |
-| Models evaluated on held-out data, with suitable metrics | Done |
+The first step-by-step workflow (sections 6 to 13) runs on the support tickets, with customer dissatisfaction as the target.
 
-**Known limitations**
-- About 3% of bookings (185) belong to clients whose tier could not be matched to Gold, Platinum or Standard, so they are excluded from the tier chart
-- Missing amounts are filled with a median by service type, which is a reasonable default but not the true value
-- Orphan bookings (client, traveler or supplier not in the dimension tables) are removed rather than repaired
-- CSAT is only available after a ticket closes, which limits the escalation model for live use
-- Anomaly detection flags unusual bookings, not confirmed errors
-- The data is synthetic, so real-world performance will differ
+| Feature | What it captures |
+| --- | --- |
+| `dissatisfied` (target) | 1 when CSAT is 1 or 2, 0 when 3 to 5, empty when there is no valid score |
+| `ticket_month`, `ticket_day_of_week`, `ticket_is_weekend` | When the ticket was opened |
+| `ticket_date_missing` | 1 when the date could not be read |
+| `first_response_hours`, `first_response_missing` | How fast the team first replied, and whether that is known |
+| `category`, `priority`, `contact_channel` | What the ticket is about and how it arrived |
+
+**A deliberate choice:** `resolution_hours`, `escalated`, `agent_notes_length` and `csat_score` are left out of this workflow, because they are only known after a ticket closes. The Objective 4 model in section 14 does use resolution time and escalation, because the business objective asks for them. That makes it a tool for reviewing and closing tickets, not for predicting them at the moment they open. The app says so on that page.
+
+**Target counts**
+
+| Outcome | Tickets |
+| --- | ---: |
+| Satisfied (0) | 1,759 |
+| Dissatisfied (1) | 671 |
+| No valid score | 70 |
+
+Dissatisfaction rate among labelled tickets: **27.6%**.
+
+### Full code
+
+```python
+from pathlib import Path
+import pandas as pd
+
+CLEAN_DIR = Path("travel_mgmt_clean")
+
+tickets_features = pd.read_csv(
+    CLEAN_DIR / "fact_support_tickets.csv",
+    parse_dates=["ticket_date"],
+)
+
+required_columns = {
+    "ticket_date",
+    "category",
+    "priority",
+    "contact_channel",
+    "first_response_hours",
+    "resolution_hours",
+    "escalated",
+    "csat_score",
+    "agent_notes_length",
+}
+missing_columns = required_columns.difference(tickets_features.columns)
+if missing_columns:
+    raise ValueError(
+        f"Cleaned ticket data is missing columns: {sorted(missing_columns)}"
+    )
+
+# Create the target from valid integer CSAT scores:
+# 1–2 = dissatisfied; 3–5 = satisfied.
+csat_numeric = pd.to_numeric(
+    tickets_features["csat_score"],
+    errors="coerce",
+)
+valid_csat = (
+    csat_numeric.between(1, 5)
+    & csat_numeric.mod(1).eq(0)
+)
+csat_numeric = csat_numeric.where(valid_csat)
+
+tickets_features["dissatisfied"] = pd.Series(
+    pd.NA,
+    index=tickets_features.index,
+    dtype="Int8",
+)
+labelled = csat_numeric.notna()
+tickets_features.loc[labelled, "dissatisfied"] = (
+    csat_numeric.loc[labelled].le(2).astype("int8")
+)
+
+# Derive calendar features from the ticket creation date.
+ticket_dates = pd.to_datetime(
+    tickets_features["ticket_date"],
+    errors="coerce",
+)
+tickets_features["ticket_month"] = ticket_dates.dt.month.astype("Int8")
+tickets_features["ticket_day_of_week"] = (
+    ticket_dates.dt.dayofweek.astype("Int8")
+)
+tickets_features["ticket_is_weekend"] = (
+    ticket_dates.dt.dayofweek
+    .isin([5, 6])
+    .where(ticket_dates.notna())
+    .astype("Int8")
+)
+tickets_features["ticket_date_missing"] = (
+    ticket_dates.isna().astype("int8")
+)
+
+# First-response time is included assuming scores are made after the first
+# response but before ticket resolution.
+response_hours = pd.to_numeric(
+    tickets_features["first_response_hours"],
+    errors="coerce",
+)
+tickets_features["first_response_hours"] = response_hours.where(
+    response_hours.ge(0)
+)
+tickets_features["first_response_missing"] = (
+    tickets_features["first_response_hours"].isna().astype("int8")
+)
+
+# These are the raw predictors for later modeling steps.
+FEATURE_COLUMNS = [
+    "category",
+    "priority",
+    "contact_channel",
+    "first_response_hours",
+    "first_response_missing",
+    "ticket_month",
+    "ticket_day_of_week",
+    "ticket_is_weekend",
+    "ticket_date_missing",
+]
+TARGET_COLUMN = "dissatisfied"
+
+print("Feature-engineered ticket rows:", len(tickets_features))
+print("Predictor columns:", FEATURE_COLUMNS)
+print("Target counts (0=satisfied, 1=dissatisfied, NA=unlabeled):")
+display(
+    tickets_features[TARGET_COLUMN]
+    .value_counts(dropna=False)
+    .sort_index()
+)
+print(
+    "Dissatisfaction rate among labeled tickets:",
+    round(tickets_features[TARGET_COLUMN].dropna().mean(), 4),
+)
+print(
+    "Excluded post-resolution or outcome fields:",
+    ["resolution_hours", "escalated", "agent_notes_length", "csat_score"],
+)
+display(tickets_features[FEATURE_COLUMNS + [TARGET_COLUMN]].head())
+```
 
 ---
 
-## 12. Key Findings & Insights
+## 7. Create Relationship Table
 
-- **Flights drive revenue** (about 64%) and hotels add about 33%; premium classes give the highest value per booking
-- **Escalation depends on ticket type.** Complaints escalate about 47% of the time and carry the lowest satisfaction (2.39 / 5)
-- **Escalation is moderately predictable** (AUC 0.77), enough to rank tickets for triage
-- **Cancellations are not yet predictable.** About 1 in 5 bookings is cancelled or a no-show, and the first model catches almost none of them
-- **Policy compliance is not explained by the available fields**, and it is stable across client tiers (72% to 75%)
-- **Trip cost is partly predictable**: the model gets the price level right but not the extremes
-- **About 2% of bookings look unusual** and form a short audit list
+A relationship table records how each ticket links to a booking and a client, and whether the links hold. It checks two things before any join: every key is unique, so a join cannot multiply rows, and the client on the ticket matches the client on the booking.
+
+| check | rows |
+| --- | --- |
+| Ticket rows | 2500 |
+| Tickets with unmatched booking IDs | 25 |
+| Ticket client IDs missing from client dimension | 20 |
+| Booking client IDs missing from client dimension | 25 |
+| Ticket/booking client ID mismatches | 0 |
+
+No ticket and booking disagree about the client. The 25 unmatched bookings and 20 missing client IDs stay in the data and are flagged, not deleted.
+
+### Full code
+
+```python
+from pathlib import Path
+import pandas as pd
+
+CLEAN_DIR = Path("travel_mgmt_clean")
+
+# Load the cleaned related tables.
+bookings_clean = pd.read_csv(CLEAN_DIR / "fact_bookings.csv")
+clients_clean = pd.read_csv(CLEAN_DIR / "dim_clients.csv")
+
+def normalize_key(series):
+    return series.astype("string").str.strip().str.upper()
+
+# Start with ticket keys only; this keeps the relationship table focused.
+relationship_source = tickets_features[
+    ["ticket_id", "booking_id", "client_id"]
+].copy()
+
+booking_lookup = (
+    bookings_clean[["booking_id", "client_id"]]
+    .rename(columns={"client_id": "booking_client_id"})
+    .copy()
+)
+client_lookup = clients_clean[["client_id"]].copy()
+
+# Normalize the keys consistently before matching.
+for frame, columns in [
+    (relationship_source, ["ticket_id", "booking_id", "client_id"]),
+    (booking_lookup, ["booking_id", "booking_client_id"]),
+    (client_lookup, ["client_id"]),
+]:
+    for column in columns:
+        frame[column] = normalize_key(frame[column])
+
+# Require unique identifiers so merges cannot silently multiply ticket rows.
+for frame, key, label in [
+    (relationship_source, "ticket_id", "ticket"),
+    (booking_lookup, "booking_id", "booking"),
+    (client_lookup, "client_id", "client"),
+]:
+    if frame[key].duplicated().any():
+        raise ValueError(
+            f"The {label} table must have unique {key} values "
+            "before relationship matching."
+        )
+
+# Match each ticket to a booking. A left join preserves tickets whose
+# booking ID is not found.
+relationship_table = relationship_source.merge(
+    booking_lookup,
+    on="booking_id",
+    how="left",
+    validate="many_to_one",
+    indicator="booking_merge",
+)
+
+relationship_table["booking_found"] = (
+    relationship_table["booking_merge"].eq("both")
+)
+
+valid_client_ids = set(client_lookup["client_id"].dropna())
+
+relationship_table["ticket_client_found"] = (
+    relationship_table["client_id"]
+    .isin(valid_client_ids)
+    .astype("boolean")
+)
+relationship_table["booking_client_found"] = (
+    relationship_table["booking_client_id"]
+    .isin(valid_client_ids)
+    .astype("boolean")
+)
+
+# Compare ticket and booking client IDs only when both are available.
+comparable_clients = (
+    relationship_table["client_id"].notna()
+    & relationship_table["booking_client_id"].notna()
+    & relationship_table["booking_found"]
+)
+relationship_table["ticket_booking_client_match"] = pd.Series(
+    pd.NA,
+    index=relationship_table.index,
+    dtype="boolean",
+)
+relationship_table.loc[
+    comparable_clients,
+    "ticket_booking_client_match",
+] = relationship_table.loc[
+    comparable_clients, "client_id"
+].eq(
+    relationship_table.loc[comparable_clients, "booking_client_id"]
+)
+
+relationship_table = (
+    relationship_table
+    .rename(columns={"client_id": "ticket_client_id"})
+    .drop(columns="booking_merge")
+)
+
+# Confirm that the relationship table still has exactly one row per ticket.
+if (
+    len(relationship_table) != len(tickets_features)
+    or relationship_table["ticket_id"].duplicated().any()
+):
+    raise AssertionError(
+        "The relationship table must preserve exactly one row per ticket."
+    )
+
+relationship_summary = pd.DataFrame([
+    ("Ticket rows", len(relationship_table)),
+    ("Tickets with unmatched booking IDs",
+     int((~relationship_table["booking_found"]).sum())),
+    ("Ticket client IDs missing from client dimension",
+     int((~relationship_table["ticket_client_found"]).sum())),
+    ("Booking client IDs missing from client dimension",
+     int((~relationship_table["booking_client_found"]).sum())),
+    ("Ticket/booking client ID mismatches",
+     int((relationship_table["ticket_booking_client_match"] == False).sum())),
+], columns=["check", "rows"])
+
+display(relationship_summary)
+display(relationship_table.head())
+
+# Save this relationship table as its own output.
+RELATIONSHIP_DIR = Path("travel_mgmt_relationships")
+RELATIONSHIP_DIR.mkdir(parents=True, exist_ok=True)
+
+relationship_table.to_csv(
+    RELATIONSHIP_DIR / "ticket_booking_client_relationships.csv",
+    index=False,
+)
+print("Relationship table saved to:", RELATIONSHIP_DIR.resolve())
+```
 
 ---
 
-## 13. Recommendations
+## 8. Exploratory Data Analysis
 
-- **Cancellations:** retrain with class weighting and a lower decision threshold, and add features such as supplier, route and past cancellations before relying on it
-- **Cost forecasting:** try tree-based or per-service models, and report error in dollars as well as log units
-- **Policy compliance:** since no field explains it, collect better data (booking channel details, approval flow, traveler history) rather than tune the model
-- **Support operations:** put complaints and emergency rebookings at the front of the queue, and use the escalation model to rank the rest. Build a version that excludes CSAT for use at ticket creation
-- **Suppliers:** revenue is spread across the top ten, so review them as a group and compare service ratings against the revenue they bring in
-- **Revenue:** offer upgrade paths to premium classes for eligible travelers and clients
-- **Billing audit:** review the flagged bookings as the starting list and record outcomes to build labels for a supervised model later
+Only the 2,430 tickets with a valid CSAT score are compared. **27.6% of them ended dissatisfied.**
+
+<p align="center"><img src="images/travel_eda_01_ticket_outcomes.png" alt="Ticket outcomes and dissatisfaction by category, priority and channel" width="100%"></p>
+<p align="center"><sub><em>Dissatisfaction by ticket category, priority and contact channel</em></sub></p>
+
+- **Complaints are the problem.** 56.2% of complaint tickets end dissatisfied, against 21% to 30% for every other category.
+- **Chat works.** Only 9.4% of chat tickets end badly, against 32% to 34% for phone, email and portal.
+- **Speed matters.** Satisfied customers waited a median of 1.3 hours for a first reply. Dissatisfied customers waited 6.0 hours.
+- **Priority is not protective.** Low and medium priority tickets are dissatisfied about 32% to 33% of the time, high and critical about 17%.
+- **No seasonal pattern.** Months with 30 or more tickets range from 19% to 36% with no trend.
+
+<p align="center"><img src="images/travel_eda_02_monthly_dissatisfaction.png" alt="Monthly dissatisfaction rate" width="100%"></p>
+<p align="center"><sub><em>Monthly dissatisfaction rate, labelled tickets only. The two extreme points at the far right are months with a single ticket each</em></sub></p>
+
+These are associations, not causes. A complaint is not unhappy because it is a complaint; it arrives unhappy.
+
+### Full code
+
+```python
+import pandas as pd
+import matplotlib.pyplot as plt
+
+required_columns = {
+    "ticket_date",
+    "category",
+    "priority",
+    "contact_channel",
+    "first_response_hours",
+    "dissatisfied",
+}
+missing_columns = required_columns.difference(tickets_features.columns)
+if missing_columns:
+    raise ValueError(f"Missing required feature columns: {sorted(missing_columns)}")
+
+# Keep the engineered data unchanged. Only labeled tickets can contribute
+# to satisfaction comparisons.
+eda_all = tickets_features.copy()
+eda_tickets = eda_all.loc[eda_all["dissatisfied"].notna()].copy()
+eda_tickets["dissatisfied"] = eda_tickets["dissatisfied"].astype("int8")
+
+print(f"All tickets: {len(eda_all):,}")
+print(f"Tickets with valid CSAT labels: {len(eda_tickets):,}")
+print(
+    "Dissatisfaction rate among labeled tickets:",
+    f"{eda_tickets['dissatisfied'].mean():.1%}",
+)
+
+# Compare ticket volume and dissatisfaction rates across categories.
+for column in ["category", "priority", "contact_channel"]:
+    grouped_data = eda_tickets.copy()
+    grouped_data[column] = (
+        grouped_data[column].fillna("missing").astype("string")
+    )
+
+    summary = (
+        grouped_data.groupby(column, dropna=False)
+        .agg(
+            tickets=("dissatisfied", "size"),
+            dissatisfied_tickets=("dissatisfied", "sum"),
+            dissatisfaction_rate=("dissatisfied", "mean"),
+        )
+        .sort_values("dissatisfaction_rate", ascending=False)
+    )
+
+    print(f"\nDissatisfaction by {column}:")
+    display(summary)
+
+# Compare first-response time for satisfied and dissatisfied tickets.
+eda_tickets["first_response_hours"] = pd.to_numeric(
+    eda_tickets["first_response_hours"],
+    errors="coerce",
+)
+
+response_summary = (
+    eda_tickets.groupby("dissatisfied")["first_response_hours"]
+    .agg(valid_responses="count", median_hours="median", mean_hours="mean")
+    .rename(index={0: "satisfied", 1: "dissatisfied"})
+)
+
+print("\nFirst-response time by outcome:")
+display(response_summary)
+
+# Explore monthly dissatisfaction rates for labeled tickets with valid dates.
+eda_tickets["ticket_month"] = pd.to_datetime(
+    eda_tickets["ticket_date"],
+    errors="coerce",
+).dt.to_period("M")
+
+monthly_summary = (
+    eda_tickets.dropna(subset=["ticket_month"])
+    .groupby("ticket_month")
+    .agg(
+        tickets=("dissatisfied", "size"),
+        dissatisfied_tickets=("dissatisfied", "sum"),
+        dissatisfaction_rate=("dissatisfied", "mean"),
+    )
+)
+
+print("\nMonthly dissatisfaction:")
+display(monthly_summary)
+
+# Plot outcome counts and rates by category, priority, and contact channel.
+fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+
+outcome_counts = (
+    eda_tickets["dissatisfied"]
+    .value_counts()
+    .reindex([0, 1], fill_value=0)
+)
+outcome_counts.index = ["Satisfied (CSAT 3-5)", "Dissatisfied (CSAT 1-2)"]
+outcome_counts.plot(
+    kind="bar",
+    ax=axes[0, 0],
+    color=["#4C9F70", "#D9534F"],
+)
+axes[0, 0].set_title("Labeled ticket outcomes")
+axes[0, 0].set_ylabel("Ticket count")
+axes[0, 0].tick_params(axis="x", rotation=15)
+
+plot_details = [
+    (axes[0, 1], "category", "Dissatisfaction by category"),
+    (axes[1, 0], "priority", "Dissatisfaction by priority"),
+    (axes[1, 1], "contact_channel", "Dissatisfaction by contact channel"),
+]
+
+for axis, column, title in plot_details:
+    plot_data = eda_tickets.copy()
+    plot_data[column] = plot_data[column].fillna("missing").astype("string")
+    rates = (
+        plot_data.groupby(column, dropna=False)["dissatisfied"]
+        .mean()
+        .sort_values(ascending=False)
+    )
+    rates.plot(kind="bar", ax=axis, color="#4472C4")
+    axis.set_title(title)
+    axis.set_ylabel("Dissatisfaction rate")
+    axis.set_ylim(0, 1)
+    axis.tick_params(axis="x", rotation=35)
+
+fig.tight_layout()
+plt.show()
+
+if not monthly_summary.empty:
+    ax = monthly_summary["dissatisfaction_rate"].plot(
+        figsize=(12, 4),
+        marker="o",
+        title="Monthly dissatisfaction rate (labeled tickets only)",
+        ylim=(0, 1),
+    )
+    ax.set_ylabel("Dissatisfaction rate")
+    ax.set_xlabel("Ticket month")
+    plt.tight_layout()
+    plt.show()
+```
 
 ---
 
-## 14. Conclusion
+## 9. Analytical Base Table
 
-This project took messy corporate travel data, cleaned it into a validated star schema while keeping about 25% more rows than a drop-everything approach, and used it to test five practical questions. Escalation ranking (AUC 0.77) and the billing anomaly list gave usable results, trip cost was partly predictable, and the cancellation and policy compliance models showed that the available fields carry little signal. Reporting that plainly is part of the result: it shows where the next round of data collection and modelling effort should go.
+The analytical base table has one row per ticket: the engineered features, the target, plus the booking's service type and the client's tier from the joins. Left joins keep every ticket, and the code stops if a join would duplicate a row.
 
-**Outputs:** `clean_bookings_master.csv`, `detected_billing_anomalies.csv`, `business_objective_charts.png`, `ml_all_objectives_validation_charts.png`, `explore_travel_mgmt_raw.ipynb`
+| check | rows |
+| --- | --- |
+| ABT rows | 2500 |
+| Labeled tickets | 2430 |
+| Unlabeled tickets | 70 |
+| Unmatched booking IDs | 25 |
+| Ticket/booking client ID mismatches | 0 |
 
+2,500 rows and 17 columns: IDs, 11 predictors, the target and two relationship flags.
+
+### Full code
+
+```python
+from pathlib import Path
+import pandas as pd
+
+CLEAN_DIR = Path("travel_mgmt_clean")
+RELATIONSHIP_DIR = Path("travel_mgmt_relationships")
+
+# Load the cleaned lookup tables and the saved relationship table.
+bookings_clean = pd.read_csv(CLEAN_DIR / "fact_bookings.csv")
+clients_clean = pd.read_csv(CLEAN_DIR / "dim_clients.csv")
+relationship_table = pd.read_csv(
+    RELATIONSHIP_DIR / "ticket_booking_client_relationships.csv"
+)
+
+# Confirm that the inputs from earlier steps are present.
+required_ticket_columns = {
+    "ticket_id",
+    "booking_id",
+    "client_id",
+    "dissatisfied",
+    *FEATURE_COLUMNS,
+}
+missing_columns = required_ticket_columns.difference(tickets_features.columns)
+if missing_columns:
+    raise ValueError(
+        f"Feature-engineered ticket data is missing columns: "
+        f"{sorted(missing_columns)}"
+    )
+
+required_relationship_columns = {
+    "ticket_id",
+    "booking_found",
+    "ticket_booking_client_match",
+}
+missing_columns = required_relationship_columns.difference(
+    relationship_table.columns
+)
+if missing_columns:
+    raise ValueError(
+        f"Relationship table is missing columns: {sorted(missing_columns)}"
+    )
+
+# Require unique keys so merges cannot multiply ticket rows.
+for frame, key, label in [
+    (tickets_features, "ticket_id", "ticket"),
+    (relationship_table, "ticket_id", "relationship"),
+    (bookings_clean, "booking_id", "booking"),
+    (clients_clean, "client_id", "client"),
+]:
+    if frame[key].duplicated().any():
+        raise ValueError(
+            f"{label} table contains duplicate values in {key}."
+        )
+
+booking_lookup = (
+    bookings_clean[["booking_id", "service_type"]]
+    .rename(columns={"service_type": "booking_service_type"})
+)
+
+client_lookup = clients_clean[["client_id", "client_tier"]]
+
+# Keep only ticket-level predictors, target, and IDs needed to join related data.
+abt = tickets_features[
+    ["ticket_id", "booking_id", "client_id", *FEATURE_COLUMNS, "dissatisfied"]
+].copy()
+
+# Left joins preserve every ticket, including tickets with missing relationships.
+abt = abt.merge(
+    relationship_table[
+        ["ticket_id", "booking_found", "ticket_booking_client_match"]
+    ],
+    on="ticket_id",
+    how="left",
+    validate="one_to_one",
+)
+
+abt = abt.merge(
+    booking_lookup,
+    on="booking_id",
+    how="left",
+    validate="many_to_one",
+)
+
+abt = abt.merge(
+    client_lookup,
+    on="client_id",
+    how="left",
+    validate="many_to_one",
+)
+
+# Define predictors separately from IDs, audit fields, and the target.
+ABT_FEATURE_COLUMNS = [
+    *FEATURE_COLUMNS,
+    "booking_service_type",
+    "client_tier",
+]
+ABT_TARGET_COLUMN = "dissatisfied"
+
+# Ensure the joins kept exactly one row for every ticket.
+if len(abt) != len(tickets_features):
+    raise AssertionError(
+        "The ABT row count must match the ticket row count."
+    )
+if abt["ticket_id"].duplicated().any():
+    raise AssertionError(
+        "The ABT must contain exactly one row per ticket."
+    )
+
+abt_summary = pd.DataFrame([
+    ("ABT rows", len(abt)),
+    ("Labeled tickets", int(abt[ABT_TARGET_COLUMN].notna().sum())),
+    ("Unlabeled tickets", int(abt[ABT_TARGET_COLUMN].isna().sum())),
+    ("Unmatched booking IDs", int((~abt["booking_found"]).sum())),
+    (
+        "Ticket/booking client ID mismatches",
+        int((abt["ticket_booking_client_match"] == False).sum()),
+    ),
+], columns=["check", "rows"])
+
+print("ABT shape:", abt.shape)
+print("Predictor columns:", ABT_FEATURE_COLUMNS)
+display(abt_summary)
+display(abt.head())
+
+# Keep the ABT as a separate output; raw and cleaned source files are unchanged.
+ABT_DIR = Path("abt")
+ABT_DIR.mkdir(parents=True, exist_ok=True)
+
+abt.to_csv(ABT_DIR / "support_satisfaction_abt.csv", index=False)
+print("Analytical base table saved to:", (ABT_DIR / "support_satisfaction_abt.csv").resolve())
+```
+
+---
+
+## 10. Encode Categorical Columns
+
+Models need numbers, so each category becomes a 0/1 column. The category lists are fixed in advance, with a `__missing__` slot for blanks. If a value appears that the lists do not know, the code stops instead of quietly encoding it as all zeros.
+
+- **31 columns in total:** 6 numeric and 25 one-hot columns from 5 categorical fields (category, priority, contact channel, booking service type, client tier).
+- Numeric gaps are left as they are for the scaling step.
+
+### Full code
+
+```python
+from pathlib import Path
+import pandas as pd
+from sklearn.preprocessing import OneHotEncoder
+
+ABT_PATH = Path("abt") / "support_satisfaction_abt.csv"
+abt = pd.read_csv(ABT_PATH)
+
+CATEGORICAL_FEATURES = [
+    "category",
+    "priority",
+    "contact_channel",
+    "booking_service_type",
+    "client_tier",
+]
+
+NUMERIC_FEATURES = [
+    "first_response_hours",
+    "first_response_missing",
+    "ticket_month",
+    "ticket_day_of_week",
+    "ticket_is_weekend",
+    "ticket_date_missing",
+]
+
+TARGET_COLUMN = "dissatisfied"
+
+required_columns = (
+    CATEGORICAL_FEATURES
+    + NUMERIC_FEATURES
+    + [TARGET_COLUMN, "ticket_id"]
+)
+missing_columns = set(required_columns) - set(abt.columns)
+
+if missing_columns:
+    raise ValueError(
+        f"ABT is missing required columns: {sorted(missing_columns)}"
+    )
+
+if abt["ticket_id"].duplicated().any():
+    raise ValueError("ABT must have one row per ticket before encoding.")
+
+# Use the known categories and reserve a category for missing values.
+CATEGORY_LEVELS = [
+    [
+        "billing dispute",
+        "complaint",
+        "emergency rebooking",
+        "itinerary change",
+        "refund request",
+        "visa or document query",
+        "__missing__",
+    ],
+    ["critical", "high", "low", "medium", "__missing__"],
+    ["chat", "email", "phone", "portal", "__missing__"],
+    ["car rental", "flight", "hotel", "__missing__"],
+    ["gold", "platinum", "standard", "__missing__"],
+]
+
+# Surface unexpected values rather than silently encoding them as all-zero.
+unknown_levels = {
+    column: sorted(
+        set(abt[column].dropna().astype(str))
+        - (set(levels) - {"__missing__"})
+    )
+    for column, levels in zip(CATEGORICAL_FEATURES, CATEGORY_LEVELS)
+}
+unknown_levels = {
+    column: levels
+    for column, levels in unknown_levels.items()
+    if levels
+}
+
+if unknown_levels:
+    raise ValueError(
+        f"Unexpected categorical values need review: {unknown_levels}"
+    )
+
+categorical_input = (
+    abt[CATEGORICAL_FEATURES]
+    .astype("string")
+    .fillna("__missing__")
+)
+
+categorical_encoder = OneHotEncoder(
+    categories=CATEGORY_LEVELS,
+    handle_unknown="ignore",
+    sparse_output=False,
+    dtype="int8",
+)
+
+categorical_values = categorical_encoder.fit_transform(categorical_input)
+categorical_feature_names = (
+    categorical_encoder.get_feature_names_out(CATEGORICAL_FEATURES).tolist()
+)
+
+categorical_encoded = pd.DataFrame(
+    categorical_values,
+    columns=categorical_feature_names,
+    index=abt.index,
+)
+
+numeric_features = (
+    abt[NUMERIC_FEATURES]
+    .apply(pd.to_numeric, errors="coerce")
+    .astype("float64")
+)
+
+# Model predictors only; ticket IDs and relationship-status fields are excluded.
+X_encoded = pd.concat(
+    [numeric_features, categorical_encoded],
+    axis=1,
+)
+y = pd.to_numeric(
+    abt[TARGET_COLUMN],
+    errors="coerce",
+).astype("Int8")
+
+if len(X_encoded) != len(abt) or abt["ticket_id"].nunique() != len(abt):
+    raise AssertionError("Encoding must preserve one row per ticket.")
+
+# Save IDs and target alongside the encoded columns for traceability.
+encoded_abt = pd.concat(
+    [abt[["ticket_id"]], X_encoded, y.rename(TARGET_COLUMN)],
+    axis=1,
+)
+
+output_path = Path("abt") / "support_satisfaction_encoded.csv"
+encoded_abt.to_csv(output_path, index=False)
+
+print("Encoded feature matrix shape:", X_encoded.shape)
+print("Encoded categorical columns:", len(categorical_feature_names))
+print("Target counts:", y.value_counts(dropna=False).to_dict())
+print(
+    "Numeric missing values retained for later preprocessing:",
+    X_encoded[NUMERIC_FEATURES]
+    .isna()
+    .sum()
+    .loc[lambda counts: counts.gt(0)]
+    .to_dict(),
+)
+print("Saved encoded data to:", output_path.resolve())
+```
+
+---
+
+## 11. Separate X and y
+
+X holds the 31 predictors, y holds the target. The ticket ID is dropped so the model cannot memorise it, and the 70 tickets without a CSAT score are excluded because there is nothing to learn from them.
+
+| | Shape |
+| --- | --- |
+| X | 2,430 rows, 31 columns |
+| y | 2,430 values (1,759 satisfied, 671 dissatisfied) |
+
+### Full code
+
+```python
+from pathlib import Path
+import pandas as pd
+
+encoded_abt = pd.read_csv(
+    Path("abt") / "support_satisfaction_encoded.csv"
+)
+
+TARGET_COLUMN = "dissatisfied"
+ID_COLUMNS = ["ticket_id"]
+
+# Exclude rows without a known target for supervised learning.
+labeled_data = encoded_abt.loc[
+    encoded_abt[TARGET_COLUMN].notna()
+].copy()
+
+# Separate predictors from the target; never train on the ticket ID.
+X = labeled_data.drop(columns=[*ID_COLUMNS, TARGET_COLUMN])
+y = labeled_data[TARGET_COLUMN].astype("int8")
+
+if not X.index.equals(y.index):
+    raise ValueError("X and y rows are not aligned.")
+
+if "ticket_id" in X.columns or TARGET_COLUMN in X.columns:
+    raise ValueError("X must exclude both ticket_id and the target.")
+
+print("X shape:", X.shape)
+print("y shape:", y.shape)
+print("Target counts (0=satisfied, 1=dissatisfied):")
+display(y.value_counts().sort_index())
+print(
+    "Unlabeled rows excluded:",
+    int(encoded_abt[TARGET_COLUMN].isna().sum()),
+)
+
+#Drop unnecessary columns 
+X = labeled_data.drop(columns=["ticket_id", "dissatisfied"])
+y = labeled_data["dissatisfied"].astype("int8")
+```
+
+---
+
+## 12. Train Test Split
+
+An 80/20 split with a fixed random seed, stratified so train and test have the same dissatisfaction rate.
+
+| | Rows | Satisfied | Dissatisfied |
+| --- | ---: | ---: | ---: |
+| Train | 1,944 | 1,407 | 537 |
+| Test | 486 | 352 | 134 |
+
+### Full code
+
+```python
+from pathlib import Path
+import pandas as pd
+from sklearn.model_selection import train_test_split
+
+encoded_abt = pd.read_csv(
+    Path("abt") / "support_satisfaction_encoded.csv"
+)
+
+TARGET_COLUMN = "dissatisfied"
+
+if TARGET_COLUMN not in encoded_abt.columns or "ticket_id" not in encoded_abt.columns:
+    raise ValueError("Encoded ABT must contain ticket_id and dissatisfied.")
+
+if encoded_abt["ticket_id"].duplicated().any():
+    raise ValueError("ticket_id must be unique before splitting.")
+
+# Exclude unlabeled tickets for this supervised-learning split.
+labeled_data = encoded_abt.loc[
+    encoded_abt[TARGET_COLUMN].notna()
+].copy()
+
+# The ID and target are not predictor features.
+X = labeled_data.drop(columns=["ticket_id", TARGET_COLUMN])
+y = labeled_data[TARGET_COLUMN].astype("int8")
+
+if y.nunique() != 2 or y.value_counts().min() < 2:
+    raise ValueError(
+        "A stratified split requires at least two rows in each target class."
+    )
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X,
+    y,
+    test_size=0.20,
+    random_state=42,
+    stratify=y,
+)
+
+if not X_train.index.equals(y_train.index):
+    raise AssertionError("Training features and target are not aligned.")
+if not X_test.index.equals(y_test.index):
+    raise AssertionError("Test features and target are not aligned.")
+
+print("X_train:", X_train.shape, "| y_train:", y_train.shape)
+print("X_test:", X_test.shape, "| y_test:", y_test.shape)
+print("Training class counts:", y_train.value_counts().sort_index().to_dict())
+print("Test class counts:", y_test.value_counts().sort_index().to_dict())
+print("Unlabeled rows excluded:", int(encoded_abt[TARGET_COLUMN].isna().sum()))
+```
+
+---
+
+## 13. Feature Scaling of Numerical Columns
+
+Missing values in the three continuous columns (first response hours, month, day of week) are filled with the **median**, then standardised. Both steps learn their numbers from the **training rows only**, so nothing from the test set leaks in. The 0/1 columns are left as they are.
+
+Check: after scaling, each continuous column has mean 0 and standard deviation 1 on the training data.
+
+### Full code
+
+```python
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler
+
+CONTINUOUS_NUMERIC_FEATURES = [
+    "first_response_hours",
+    "ticket_month",
+    "ticket_day_of_week",
+]
+
+BINARY_NUMERIC_FEATURES = [
+    "first_response_missing",
+    "ticket_is_weekend",
+    "ticket_date_missing",
+]
+
+numeric_columns = CONTINUOUS_NUMERIC_FEATURES + BINARY_NUMERIC_FEATURES
+missing_columns = set(numeric_columns) - set(X_train.columns)
+
+if missing_columns:
+    raise ValueError(
+        f"Expected numerical columns are missing: {sorted(missing_columns)}"
+    )
+
+# Fit only on training data to prevent leakage from the test set.
+numeric_imputer = SimpleImputer(strategy="median")
+numeric_scaler = StandardScaler()
+
+X_train_scaled = X_train.copy()
+X_test_scaled = X_test.copy()
+
+train_values = numeric_imputer.fit_transform(
+    X_train[CONTINUOUS_NUMERIC_FEATURES]
+)
+test_values = numeric_imputer.transform(
+    X_test[CONTINUOUS_NUMERIC_FEATURES]
+)
+
+X_train_scaled.loc[:, CONTINUOUS_NUMERIC_FEATURES] = (
+    numeric_scaler.fit_transform(train_values)
+)
+X_test_scaled.loc[:, CONTINUOUS_NUMERIC_FEATURES] = (
+    numeric_scaler.transform(test_values)
+)
+
+# Retain binary indicator features as 0/1 values.
+X_train_scaled.loc[:, BINARY_NUMERIC_FEATURES] = (
+    X_train_scaled[BINARY_NUMERIC_FEATURES].fillna(0)
+)
+X_test_scaled.loc[:, BINARY_NUMERIC_FEATURES] = (
+    X_test_scaled[BINARY_NUMERIC_FEATURES].fillna(0)
+)
+
+if X_train_scaled.isna().any().any() or X_test_scaled.isna().any().any():
+    raise ValueError("Missing values remain after numeric preprocessing.")
+
+print("Scaled training shape:", X_train_scaled.shape)
+print("Scaled test shape:", X_test_scaled.shape)
+print(
+    "Training means for continuous features:",
+    X_train_scaled[CONTINUOUS_NUMERIC_FEATURES].mean().round(4).to_dict(),
+)
+print(
+    "Training standard deviations for continuous features:",
+    X_train_scaled[CONTINUOUS_NUMERIC_FEATURES].std(ddof=0).round(4).to_dict(),
+)
+print(
+    "Train/test target alignment:",
+    X_train_scaled.index.equals(y_train.index),
+    X_test_scaled.index.equals(y_test.index),
+)
+```
+
+---
+
+## 14. Train Model
+
+Sections 10 to 13 show the recipe on one table. For the five objectives the same recipe runs **inside a scikit-learn Pipeline**: fill gaps (median for numbers, most frequent for categories), scale the numbers, one-hot encode the categories, then fit the model. Because the whole chain is fitted on training rows only, the test set never influences preprocessing, and the saved pipeline repeats the same steps on new data.
+
+| # | Objective | Features | Models compared |
+| --- | --- | --- | --- |
+| 1 | Reduce booking cancellations | advance days, supplier rating, cancellation flexibility, service type, client tier, booking channel, policy compliance | Logistic Regression, Random Forest, Hist Gradient Boosting |
+| 2 | Forecast trip cost to improve client budgeting | service type, travel class, destination region, international trip, advance days, trip length, peak season | Linear Regression, Random Forest Regressor, Hist Gradient Boosting Regressor |
+| 3 | Improve travel policy compliance | travel class, traveller grade, preferred partner, advance days, booking channel, client has a travel policy | Logistic Regression, Random Forest, Hist Gradient Boosting |
+| 4 | Raise customer satisfaction | resolution hours, first response hours, escalated, ticket category, contact channel, client tier | Logistic Regression, Random Forest, Hist Gradient Boosting |
+| 5 | Detect booking amount anomalies and billing errors | how far an amount sits from similar bookings (same service, class and destination region) | Isolation Forest |
+
+All classifiers use balanced class weights because cancellations, policy breaches and dissatisfied tickets are the minority. All splits are 80/20 with seed 42, stratified for classification.
+
+### Objective 1: Reduce booking cancellations
+
+**Target:** `cancelled`: booking status is Cancelled (17.1% of bookings). **Models:** Logistic Regression, Random Forest, Hist Gradient Boosting.
+
+```python
+import numpy as np
+import pandas as pd
+
+from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+
+from pathlib import Path
+
+raw_dir = Path("travel_mgmt_raw")
+clean_dir = Path("travel_mgmt_clean")
+cancellation_bookings = pd.read_csv(clean_dir / "fact_bookings.csv")
+cancellation_suppliers = pd.read_csv(
+    raw_dir / "dim_suppliers.csv"
+).drop_duplicates()
+cancellation_clients = pd.read_csv(clean_dir / "dim_clients.csv")
+
+for frame, key in (
+    (cancellation_bookings, "booking_id"),
+    (cancellation_suppliers, "supplier_id"),
+    (cancellation_clients, "client_id"),
+):
+    frame[key] = frame[key].astype("string").str.strip().str.upper()
+    if frame[key].duplicated().any():
+        raise ValueError(f"Duplicate values found in {key}.")
+
+booking_status = (
+    cancellation_bookings["booking_status"]
+    .astype("string")
+    .str.strip()
+    .str.casefold()
+)
+known_statuses = {"cancelled", "canceled", "completed", "no-show", "no show"}
+if not booking_status.isin(known_statuses).all():
+    raise ValueError("Unrecognized booking_status values found.")
+
+cancellation_model_data = cancellation_bookings.copy()
+cancellation_model_data["cancelled"] = booking_status.isin(
+    {"cancelled", "canceled"}
+).astype("int8")
+
+cancellation_model_data = cancellation_model_data.merge(
+    cancellation_suppliers[
+        ["supplier_id", "service_rating", "cancellation_flexibility"]
+    ],
+    on="supplier_id",
+    how="left",
+    validate="many_to_one",
+).merge(
+    cancellation_clients[["client_id", "client_tier"]],
+    on="client_id",
+    how="left",
+    validate="many_to_one",
+)
+
+booking_dates = pd.to_datetime(
+    cancellation_model_data["booking_date"], format="mixed", errors="coerce"
+)
+travel_dates = pd.to_datetime(
+    cancellation_model_data["travel_date"], format="mixed", errors="coerce"
+)
+cancellation_model_data["advance_days"] = (
+    (travel_dates - booking_dates).dt.days
+    .where((travel_dates - booking_dates).dt.days.ge(0))
+    .astype("float64")
+)
+cancellation_model_data["advance_days_missing"] = (
+    cancellation_model_data["advance_days"].isna().astype("int8")
+)
+
+numeric_features = [
+    "advance_days",
+    "advance_days_missing",
+    "service_rating",
+]
+categorical_features = [
+    "cancellation_flexibility",
+    "service_type",
+    "client_tier",
+    "booking_channel",
+    "policy_compliant",
+]
+cancellation_features = numeric_features + categorical_features
+
+# Exclude booking_id from model inputs, but keep it for traceability.
+X = cancellation_model_data[cancellation_features].copy()
+y = pd.to_numeric(
+    cancellation_model_data["cancelled"], errors="raise"
+).astype("int8")
+booking_ids = cancellation_model_data["booking_id"].copy()
+
+# Convert pandas nullable numeric types and pd.NA to standard numeric NaN.
+for column in numeric_features:
+    X[column] = pd.to_numeric(X[column], errors="coerce").astype("float64")
+
+# Convert nullable strings and pd.NA to ordinary objects and np.nan.
+X[categorical_features] = (
+    X[categorical_features]
+    .astype(object)
+    .where(X[categorical_features].notna(), np.nan)
+)
+
+X_train, X_test, y_train, y_test, booking_id_train, booking_id_test = (
+    train_test_split(
+        X,
+        y,
+        booking_ids,
+        test_size=0.20,
+        random_state=42,
+        stratify=y,
+    )
+)
+
+preprocessor = ColumnTransformer(
+    transformers=[
+        (
+            "numeric",
+            Pipeline(steps=[
+                ("imputer", SimpleImputer(strategy="median")),
+                ("scaler", StandardScaler()),
+            ]),
+            numeric_features,
+        ),
+        (
+            "categorical",
+            Pipeline(steps=[
+                ("imputer", SimpleImputer(strategy="most_frequent")),
+                ("encoder", OneHotEncoder(
+                    handle_unknown="ignore",
+                    sparse_output=False,
+                )),
+            ]),
+            categorical_features,
+        ),
+    ]
+)
+
+candidate_models = {
+    "Logistic Regression": LogisticRegression(
+        max_iter=1000,
+        class_weight="balanced",
+        random_state=42,
+    ),
+    "Random Forest": RandomForestClassifier(
+        n_estimators=300,
+        min_samples_leaf=2,
+        class_weight="balanced",
+        random_state=42,
+        n_jobs=-1,
+    ),
+    "Hist Gradient Boosting": HistGradientBoostingClassifier(
+        max_iter=150,
+        learning_rate=0.08,
+        class_weight="balanced",
+        random_state=42,
+    ),
+}
+
+trained_models = {}
+
+for model_name, classifier in candidate_models.items():
+    model_pipeline = Pipeline(steps=[
+        ("preprocessor", preprocessor),
+        ("classifier", classifier),
+    ])
+    model_pipeline.fit(X_train, y_train)
+    trained_models[model_name] = model_pipeline
+    print(f"{model_name} trained.")
+
+print("\nTraining rows:", len(X_train))
+print("Test rows reserved for later:", len(X_test))
+print("Training cancellation rate:", round(y_train.mean(), 3))
+print("Test cancellation rate:", round(y_test.mean(), 3))
+```
+
+### Objective 2: Forecast trip cost to improve client budgeting
+
+**Target:** `amount_usd`, modelled as its logarithm and converted back to dollars. **Models:** Linear Regression, Random Forest Regressor, Hist Gradient Boosting Regressor.
+
+```python
+from pathlib import Path
+import re
+import unicodedata
+
+import numpy as np
+import pandas as pd
+
+from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import (
+    HistGradientBoostingRegressor,
+    RandomForestRegressor,
+)
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+
+# Load the cleaned bookings table.
+clean_dir = Path("travel_mgmt_clean")
+bookings = pd.read_csv(clean_dir / "fact_bookings.csv")
+
+
+def normalize_city(value):
+    if pd.isna(value):
+        return pd.NA
+
+    # Normalize the corrupted São Paulo spelling present in the source data.
+    text = str(value).strip().casefold().replace("\ufffd", "a")
+    text = unicodedata.normalize("NFKD", text)
+    text = text.encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def normalize_category(series):
+    return (
+        series.astype("string")
+        .str.strip()
+        .str.replace(r"\s+", " ", regex=True)
+        .str.casefold()
+    )
+
+
+# Map the city names and airport-code variants observed in these bookings.
+city_locations = {
+    "bom": ("India", "South Asia"),
+    "bombay": ("India", "South Asia"),
+    "mumbai": ("India", "South Asia"),
+    "dxb": ("United Arab Emirates", "Middle East"),
+    "dubai": ("United Arab Emirates", "Middle East"),
+    "fra": ("Germany", "Europe"),
+    "frankfurt": ("Germany", "Europe"),
+    "gru": ("Brazil", "South America"),
+    "sao paulo": ("Brazil", "South America"),
+    "jnb": ("South Africa", "Africa"),
+    "joburg": ("South Africa", "Africa"),
+    "johannesburg": ("South Africa", "Africa"),
+    "lagos": ("Nigeria", "Africa"),
+    "los": ("Nigeria", "Africa"),
+    "lon": ("United Kingdom", "Europe"),
+    "london": ("United Kingdom", "Europe"),
+    "nyc": ("United States", "North America"),
+    "new york": ("United States", "North America"),
+    "sin": ("Singapore", "Southeast Asia"),
+    "singapore": ("Singapore", "Southeast Asia"),
+    "syd": ("Australia", "Oceania"),
+    "sydney": ("Australia", "Oceania"),
+}
+
+regression_data = bookings.copy()
+
+# Derive destination region and international-trip indicator.
+regression_data["origin_city_key"] = regression_data["origin_city"].map(
+    normalize_city
+)
+regression_data["destination_city_key"] = regression_data[
+    "destination_city"
+].map(normalize_city)
+
+unknown_origin = sorted(
+    set(regression_data["origin_city_key"].dropna()) - set(city_locations)
+)
+unknown_destination = sorted(
+    set(regression_data["destination_city_key"].dropna()) - set(city_locations)
+)
+
+if unknown_origin or unknown_destination:
+    raise ValueError(
+        "Add mappings for unknown cities before training. "
+        f"Origin cities: {unknown_origin}; "
+        f"destination cities: {unknown_destination}"
+    )
+
+regression_data["origin_country"] = regression_data["origin_city_key"].map(
+    lambda city: city_locations[city][0]
+)
+regression_data["destination_country"] = regression_data[
+    "destination_city_key"
+].map(lambda city: city_locations[city][0])
+regression_data["destination_region"] = regression_data[
+    "destination_city_key"
+].map(lambda city: city_locations[city][1])
+regression_data["international"] = (
+    regression_data["origin_country"]
+    != regression_data["destination_country"]
+).astype("int8")
+
+# Parse currency values such as "$1,165.07" and "USD 1,787.82".
+amount_text = regression_data["amount_usd"].astype("string").str.strip()
+parenthesized_negative = amount_text.str.fullmatch(r"\(.*\)", na=False)
+amount_text = (
+    amount_text
+    .str.replace(r"(?i)\bUSD\b", "", regex=True)
+    .str.replace(r"[$,()]", "", regex=True)
+    .str.replace(r"[^0-9.\-]", "", regex=True)
+)
+regression_data["amount_usd"] = pd.to_numeric(
+    amount_text,
+    errors="coerce",
+)
+regression_data.loc[parenthesized_negative, "amount_usd"] *= -1
+
+# A log target requires positive, finite booking amounts.
+valid_amount = (
+    regression_data["amount_usd"].notna()
+    & np.isfinite(regression_data["amount_usd"])
+    & regression_data["amount_usd"].gt(0)
+)
+excluded_amount_rows = int((~valid_amount).sum())
+regression_data = regression_data.loc[valid_amount].copy()
+regression_data["log_amount_usd"] = np.log(regression_data["amount_usd"])
+
+# Parse dates and correct travel/return dates when those two fields were swapped.
+booking_date = pd.to_datetime(
+    regression_data["booking_date"],
+    format="mixed",
+    errors="coerce",
+)
+travel_date = pd.to_datetime(
+    regression_data["travel_date"],
+    format="mixed",
+    errors="coerce",
+)
+return_date = pd.to_datetime(
+    regression_data["return_date"],
+    format="mixed",
+    errors="coerce",
+)
+
+swapped_dates = (
+    travel_date.notna()
+    & return_date.notna()
+    & return_date.lt(travel_date)
+)
+corrected_travel_date = travel_date.where(~swapped_dates, return_date)
+corrected_return_date = return_date.where(~swapped_dates, travel_date)
+
+advance_days = (corrected_travel_date - booking_date).dt.days
+trip_length_days = (
+    corrected_return_date - corrected_travel_date
+).dt.days
+
+regression_data["advance_days"] = (
+    advance_days.where(advance_days >= 0).astype("float64")
+)
+regression_data["trip_length_days"] = (
+    trip_length_days.where(trip_length_days >= 0).astype("float64")
+)
+
+# Provisional peak-season definition: June, July, August, and December.
+peak_season_months = {6, 7, 8, 12}
+travel_month = corrected_travel_date.dt.month
+regression_data["peak_season"] = travel_month.isin(
+    peak_season_months
+).astype("int8")
+regression_data.loc[travel_month.isna(), "peak_season"] = pd.NA
+
+regression_data["service_type"] = normalize_category(
+    regression_data["service_type"]
+)
+regression_data["travel_class"] = normalize_category(
+    regression_data["travel_class"]
+)
+
+# Define Objective 2 features and target.
+regression_features = [
+    "service_type",
+    "travel_class",
+    "destination_region",
+    "international",
+    "advance_days",
+    "trip_length_days",
+    "peak_season",
+]
+numeric_features = [
+    "international",
+    "advance_days",
+    "trip_length_days",
+    "peak_season",
+]
+categorical_features = [
+    "service_type",
+    "travel_class",
+    "destination_region",
+]
+
+X_regression = regression_data[regression_features].copy()
+y_regression = regression_data["log_amount_usd"].astype("float64")
+regression_booking_ids = regression_data["booking_id"].copy()
+
+# Ensure nullable pandas values are handled as numeric NaN/object NaN.
+for column in numeric_features:
+    X_regression[column] = pd.to_numeric(
+        X_regression[column],
+        errors="coerce",
+    ).astype("float64")
+
+for column in categorical_features:
+    X_regression[column] = (
+        X_regression[column]
+        .astype(object)
+        .where(X_regression[column].notna(), np.nan)
+    )
+
+# Split features, target, and IDs together so booking IDs stay aligned.
+(
+    X_regression_train,
+    X_regression_test,
+    y_regression_train,
+    y_regression_test,
+    regression_id_train,
+    regression_id_test,
+) = train_test_split(
+    X_regression,
+    y_regression,
+    regression_booking_ids,
+    test_size=0.20,
+    random_state=42,
+)
+
+# Impute, scale, and encode within each model pipeline.
+regression_preprocessor = ColumnTransformer(
+    transformers=[
+        (
+            "numeric",
+            Pipeline(steps=[
+                ("imputer", SimpleImputer(strategy="median")),
+                ("scaler", StandardScaler()),
+            ]),
+            numeric_features,
+        ),
+        (
+            "categorical",
+            Pipeline(steps=[
+                ("imputer", SimpleImputer(strategy="most_frequent")),
+                ("encoder", OneHotEncoder(
+                    handle_unknown="ignore",
+                    sparse_output=False,
+                )),
+            ]),
+            categorical_features,
+        ),
+    ]
+)
+
+regression_candidates = {
+    "Linear Regression": LinearRegression(),
+    "Random Forest Regressor": RandomForestRegressor(
+        n_estimators=300,
+        min_samples_leaf=2,
+        random_state=42,
+        n_jobs=-1,
+    ),
+    "Hist Gradient Boosting Regressor": HistGradientBoostingRegressor(
+        max_iter=150,
+        learning_rate=0.08,
+        random_state=42,
+    ),
+}
+
+regression_models = {}
+
+for model_name, estimator in regression_candidates.items():
+    model_pipeline = Pipeline(steps=[
+        ("preprocessor", regression_preprocessor),
+        ("regressor", estimator),
+    ])
+    model_pipeline.fit(X_regression_train, y_regression_train)
+    regression_models[model_name] = model_pipeline
+    print(f"{model_name} trained.")
+
+print("\nRegression modeling rows:", len(regression_data))
+print("Rows excluded for missing/non-positive amount:", excluded_amount_rows)
+print("Training rows:", len(X_regression_train))
+print("Test rows reserved for later:", len(X_regression_test))
+print("Peak-season months used:", sorted(peak_season_months))
+```
+
+### Objective 3: Improve travel policy compliance
+
+**Target:** `out_of_policy`: policy_compliant is No (26.2% of bookings). **Models:** Logistic Regression, Random Forest, Hist Gradient Boosting.
+
+```python
+import numpy as np
+import pandas as pd
+from pathlib import Path
+
+from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+
+raw_dir = Path("travel_mgmt_raw")
+clean_dir = Path("travel_mgmt_clean")
+
+bookings = pd.read_csv(clean_dir / "fact_bookings.csv")
+travelers = pd.read_csv(raw_dir / "dim_travelers.csv")
+suppliers = pd.read_csv(raw_dir / "dim_suppliers.csv")
+clients = pd.read_csv(clean_dir / "dim_clients.csv")
+
+
+def normalize_text(series):
+    return (
+        series.astype("string")
+        .str.strip()
+        .str.replace(r"\s+", " ", regex=True)
+        .str.casefold()
+    )
+
+
+def normalize_key(series):
+    return series.astype("string").str.strip().str.upper()
+
+
+def require_unique_key(frame, key, table_name):
+    frame.drop_duplicates(inplace=True)
+    if frame[key].duplicated().any():
+        raise ValueError(
+            f"{table_name} has conflicting duplicate values for {key}; "
+            "resolve them before training."
+        )
+
+
+# Normalize keys before joining tables.
+for frame, column in (
+    (bookings, "booking_id"),
+    (bookings, "client_id"),
+    (bookings, "traveler_id"),
+    (bookings, "supplier_id"),
+    (travelers, "traveler_id"),
+    (suppliers, "supplier_id"),
+    (clients, "client_id"),
+):
+    frame[column] = normalize_key(frame[column])
+
+for frame, key, name in (
+    (bookings, "booking_id", "Bookings"),
+    (travelers, "traveler_id", "Travelers"),
+    (suppliers, "supplier_id", "Suppliers"),
+    (clients, "client_id", "Clients"),
+):
+    require_unique_key(frame, key, name)
+
+# Create the target from booking-level policy compliance.
+policy_status = normalize_text(bookings["policy_compliant"])
+policy_status = policy_status.replace({
+    "y": "yes",
+    "true": "yes",
+    "1": "yes",
+    "n": "no",
+    "false": "no",
+    "0": "no",
+})
+known_policy = policy_status.isin(["yes", "no"])
+
+policy_data = bookings.loc[known_policy].copy()
+policy_data["out_of_policy"] = (
+    policy_status.loc[known_policy].eq("no").astype("int8")
+)
+
+# Derive lead time from mixed date formats; invalid/negative values are missing.
+booking_date = pd.to_datetime(
+    policy_data["booking_date"], format="mixed", errors="coerce"
+)
+travel_date = pd.to_datetime(
+    policy_data["travel_date"], format="mixed", errors="coerce"
+)
+policy_data["advance_days"] = (travel_date - booking_date).dt.days
+policy_data.loc[policy_data["advance_days"] < 0, "advance_days"] = np.nan
+policy_data["advance_days"] = pd.to_numeric(
+    policy_data["advance_days"], errors="coerce"
+).astype("float64")
+policy_data["advance_days_missing"] = (
+    policy_data["advance_days"].isna().astype("int8")
+)
+
+# Normalize the booking and dimension attributes used by this objective.
+policy_data["travel_class"] = normalize_text(policy_data["travel_class"])
+policy_data["booking_channel"] = normalize_text(policy_data["booking_channel"])
+
+traveler_features = travelers[["traveler_id", "grade"]].copy()
+traveler_features["traveler_grade"] = normalize_text(
+    traveler_features.pop("grade")
+)
+
+supplier_features = suppliers[["supplier_id", "preferred_partner"]].copy()
+supplier_features["preferred_partner"] = normalize_text(
+    supplier_features["preferred_partner"]
+).replace({
+    "y": "yes", "true": "yes", "1": "yes",
+    "n": "no", "false": "no", "0": "no",
+})
+
+client_features = clients[["client_id", "has_travel_policy"]].copy()
+client_features["has_travel_policy"] = normalize_text(
+    client_features["has_travel_policy"]
+).replace({
+    "y": "yes", "true": "yes", "1": "yes",
+    "n": "no", "false": "no", "0": "no",
+})
+
+policy_data = policy_data.merge(
+    traveler_features, on="traveler_id", how="left", validate="many_to_one"
+)
+policy_data = policy_data.merge(
+    supplier_features, on="supplier_id", how="left", validate="many_to_one"
+)
+policy_data = policy_data.merge(
+    client_features, on="client_id", how="left", validate="many_to_one"
+)
+
+policy_features = [
+    "travel_class",
+    "traveler_grade",
+    "preferred_partner",
+    "advance_days",
+    "advance_days_missing",
+    "booking_channel",
+    "has_travel_policy",
+]
+
+X_policy = policy_data[policy_features].copy()
+y_policy = policy_data["out_of_policy"].astype("int8")
+policy_booking_ids = policy_data["booking_id"].copy()
+
+numeric_policy_features = ["advance_days", "advance_days_missing"]
+categorical_policy_features = [
+    "travel_class",
+    "traveler_grade",
+    "preferred_partner",
+    "booking_channel",
+    "has_travel_policy",
+]
+
+for column in categorical_policy_features:
+    X_policy[column] = (
+        X_policy[column].astype(object)
+        .where(X_policy[column].notna(), np.nan)
+    )
+
+X_policy_train, X_policy_test, y_policy_train, y_policy_test, policy_id_train, policy_id_test = (
+    train_test_split(
+        X_policy,
+        y_policy,
+        policy_booking_ids,
+        test_size=0.20,
+        random_state=42,
+        stratify=y_policy,
+    )
+)
+
+policy_preprocessor = ColumnTransformer(
+    transformers=[
+        (
+            "numeric",
+            Pipeline(steps=[
+                ("imputer", SimpleImputer(strategy="median")),
+                ("scaler", StandardScaler()),
+            ]),
+            numeric_policy_features,
+        ),
+        (
+            "categorical",
+            Pipeline(steps=[
+                ("imputer", SimpleImputer(strategy="most_frequent")),
+                ("encoder", OneHotEncoder(
+                    handle_unknown="ignore",
+                    sparse_output=False,
+                )),
+            ]),
+            categorical_policy_features,
+        ),
+    ]
+)
+
+policy_candidates = {
+    "Logistic Regression": LogisticRegression(
+        max_iter=1000, class_weight="balanced", random_state=42
+    ),
+    "Random Forest": RandomForestClassifier(
+        n_estimators=300,
+        min_samples_leaf=2,
+        class_weight="balanced",
+        random_state=42,
+        n_jobs=-1,
+    ),
+    "Hist Gradient Boosting": HistGradientBoostingClassifier(
+        max_iter=150,
+        learning_rate=0.08,
+        class_weight="balanced",
+        random_state=42,
+    ),
+}
+
+policy_models = {}
+
+for model_name, classifier in policy_candidates.items():
+    pipeline = Pipeline(steps=[
+        ("preprocessor", policy_preprocessor),
+        ("classifier", classifier),
+    ])
+    pipeline.fit(X_policy_train, y_policy_train)
+    policy_models[model_name] = pipeline
+    print(f"Objective 3 — {model_name} trained.")
+
+print("\nTraining rows:", len(X_policy_train))
+print("Test rows reserved for later:", len(X_policy_test))
+print("Training out-of-policy rate:", round(y_policy_train.mean(), 3))
+print("Test out-of-policy rate:", round(y_policy_test.mean(), 3))
+```
+
+### Objective 4: Raise customer satisfaction
+
+**Target:** `dissatisfied`: CSAT score of 1 or 2 (27.6% of labelled tickets). **Models:** Logistic Regression, Random Forest, Hist Gradient Boosting.
+
+```python
+import numpy as np
+import pandas as pd
+from pathlib import Path
+
+from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+
+clean_dir = Path("travel_mgmt_clean")
+
+tickets = pd.read_csv(clean_dir / "fact_support_tickets.csv")
+bookings = pd.read_csv(clean_dir / "fact_bookings.csv")
+clients = pd.read_csv(clean_dir / "dim_clients.csv")
+
+
+def normalize_text(series):
+    return (
+        series.astype("string")
+        .str.strip()
+        .str.replace(r"\s+", " ", regex=True)
+        .str.casefold()
+    )
+
+
+def normalize_key(series):
+    return series.astype("string").str.strip().str.upper()
+
+
+# Normalize keys and ensure lookup tables do not duplicate ticket rows.
+tickets["ticket_id"] = normalize_key(tickets["ticket_id"])
+tickets["booking_id"] = normalize_key(tickets["booking_id"])
+tickets["client_id"] = normalize_key(tickets["client_id"])
+bookings["booking_id"] = normalize_key(bookings["booking_id"])
+bookings["client_id"] = normalize_key(bookings["client_id"])
+clients["client_id"] = normalize_key(clients["client_id"])
+
+if tickets["ticket_id"].duplicated().any():
+    raise ValueError("Tickets contain duplicate ticket IDs.")
+if bookings["booking_id"].duplicated().any():
+    raise ValueError("Bookings contain duplicate booking IDs.")
+if clients["client_id"].duplicated().any():
+    raise ValueError("Clients contain duplicate client IDs.")
+
+# Use the ticket client ID when available; otherwise fall back to its booking.
+ticket_client_lookup = bookings[["booking_id", "client_id"]].rename(
+    columns={"client_id": "booking_client_id"}
+)
+satisfaction_data = tickets.merge(
+    ticket_client_lookup,
+    on="booking_id",
+    how="left",
+    validate="many_to_one",
+)
+satisfaction_data["client_id"] = satisfaction_data["client_id"].fillna(
+    satisfaction_data["booking_client_id"]
+)
+
+client_tiers = clients[["client_id", "client_tier"]].copy()
+client_tiers["client_tier"] = normalize_text(client_tiers["client_tier"])
+satisfaction_data = satisfaction_data.merge(
+    client_tiers,
+    on="client_id",
+    how="left",
+    validate="many_to_one",
+)
+
+# Keep only tickets with valid labeled CSAT values (1 through 5).
+csat = pd.to_numeric(satisfaction_data["csat_score"], errors="coerce")
+labeled = csat.between(1, 5)
+satisfaction_data = satisfaction_data.loc[labeled].copy()
+csat = csat.loc[labeled]
+satisfaction_data["dissatisfied"] = csat.le(2).astype("int8")
+
+# Prepare the objective's specified features.
+satisfaction_features = [
+    "resolution_hours",
+    "first_response_hours",
+    "escalated",
+    "category",
+    "contact_channel",
+    "client_tier",
+]
+numeric_satisfaction_features = [
+    "resolution_hours",
+    "first_response_hours",
+]
+categorical_satisfaction_features = [
+    "escalated",
+    "category",
+    "contact_channel",
+    "client_tier",
+]
+
+for column in numeric_satisfaction_features:
+    satisfaction_data[column] = pd.to_numeric(
+        satisfaction_data[column], errors="coerce"
+    ).astype("float64")
+
+for column in categorical_satisfaction_features:
+    satisfaction_data[column] = normalize_text(satisfaction_data[column])
+    satisfaction_data[column] = (
+        satisfaction_data[column].astype(object)
+        .where(satisfaction_data[column].notna(), np.nan)
+    )
+
+X_satisfaction = satisfaction_data[satisfaction_features].copy()
+y_satisfaction = satisfaction_data["dissatisfied"].astype("int8")
+satisfaction_ticket_ids = satisfaction_data["ticket_id"].copy()
+
+X_satisfaction_train, X_satisfaction_test, y_satisfaction_train, y_satisfaction_test, satisfaction_id_train, satisfaction_id_test = (
+    train_test_split(
+        X_satisfaction,
+        y_satisfaction,
+        satisfaction_ticket_ids,
+        test_size=0.20,
+        random_state=42,
+        stratify=y_satisfaction,
+    )
+)
+
+satisfaction_preprocessor = ColumnTransformer(
+    transformers=[
+        (
+            "numeric",
+            Pipeline(steps=[
+                ("imputer", SimpleImputer(strategy="median")),
+                ("scaler", StandardScaler()),
+            ]),
+            numeric_satisfaction_features,
+        ),
+        (
+            "categorical",
+            Pipeline(steps=[
+                ("imputer", SimpleImputer(strategy="most_frequent")),
+                ("encoder", OneHotEncoder(
+                    handle_unknown="ignore",
+                    sparse_output=False,
+                )),
+            ]),
+            categorical_satisfaction_features,
+        ),
+    ]
+)
+
+satisfaction_candidates = {
+    "Logistic Regression": LogisticRegression(
+        max_iter=1000, class_weight="balanced", random_state=42
+    ),
+    "Random Forest": RandomForestClassifier(
+        n_estimators=300,
+        min_samples_leaf=2,
+        class_weight="balanced",
+        random_state=42,
+        n_jobs=-1,
+    ),
+    "Hist Gradient Boosting": HistGradientBoostingClassifier(
+        max_iter=150,
+        learning_rate=0.08,
+        class_weight="balanced",
+        random_state=42,
+    ),
+}
+
+satisfaction_models = {}
+
+for model_name, classifier in satisfaction_candidates.items():
+    pipeline = Pipeline(steps=[
+        ("preprocessor", satisfaction_preprocessor),
+        ("classifier", classifier),
+    ])
+    pipeline.fit(X_satisfaction_train, y_satisfaction_train)
+    satisfaction_models[model_name] = pipeline
+    print(f"Objective 4 — {model_name} trained.")
+
+print("\nTraining rows:", len(X_satisfaction_train))
+print("Test rows reserved for later:", len(X_satisfaction_test))
+print("Training dissatisfied rate:", round(y_satisfaction_train.mean(), 3))
+print("Test dissatisfied rate:", round(y_satisfaction_test.mean(), 3))
+```
+
+### Objective 5: Detect booking amount anomalies and billing errors
+
+**Target:** none while training; the answer key is used only to score the result. **Models:** Isolation Forest.
+
+```python
+from pathlib import Path
+import re
+import unicodedata
+
+import numpy as np
+import pandas as pd
+
+from sklearn.ensemble import IsolationForest
+from sklearn.impute import SimpleImputer
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+
+# Load the cleaned bookings. The answer key is intentionally not loaded here.
+bookings = pd.read_csv(
+    Path("travel_mgmt_clean") / "fact_bookings.csv"
+)
+
+
+def normalize_city(value):
+    if pd.isna(value):
+        return "missing"
+
+    text = str(value).strip().casefold().replace("\ufffd", "a")
+    text = unicodedata.normalize("NFKD", text)
+    text = text.encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def normalize_category(series):
+    return (
+        series.astype("string")
+        .str.strip()
+        .str.replace(r"\s+", " ", regex=True)
+        .str.casefold()
+        .fillna("missing")
+    )
+
+
+# Standardize city aliases observed in this dataset.
+city_regions = {
+    "bom": "South Asia",
+    "bombay": "South Asia",
+    "mumbai": "South Asia",
+    "dxb": "Middle East",
+    "dubai": "Middle East",
+    "fra": "Europe",
+    "frankfurt": "Europe",
+    "gru": "South America",
+    "sao paulo": "South America",
+    "jnb": "Africa",
+    "joburg": "Africa",
+    "johannesburg": "Africa",
+    "lagos": "Africa",
+    "los": "Africa",
+    "lon": "Europe",
+    "london": "Europe",
+    "nyc": "North America",
+    "new york": "North America",
+    "sin": "Southeast Asia",
+    "singapore": "Southeast Asia",
+    "syd": "Oceania",
+    "sydney": "Oceania",
+}
+
+anomaly_data = bookings[
+    [
+        "booking_id",
+        "service_type",
+        "travel_class",
+        "destination_city",
+        "amount_usd",
+    ]
+].copy()
+
+anomaly_data["booking_id"] = (
+    anomaly_data["booking_id"].astype("string").str.strip().str.upper()
+)
+anomaly_data["service_type"] = normalize_category(
+    anomaly_data["service_type"]
+)
+anomaly_data["travel_class"] = normalize_category(
+    anomaly_data["travel_class"]
+)
+anomaly_data["destination_region"] = (
+    anomaly_data["destination_city"].map(normalize_city).map(city_regions)
+)
+
+if anomaly_data["destination_region"].isna().any():
+    unknown = (
+        anomaly_data.loc[
+            anomaly_data["destination_region"].isna(),
+            "destination_city",
+        ]
+        .dropna()
+        .unique()
+        .tolist()
+    )
+    raise ValueError(f"Add destination-region mappings for: {unknown}")
+
+# Parse currency values while retaining zero and negative amounts as potential anomalies.
+amount_text = anomaly_data["amount_usd"].astype("string").str.strip()
+parenthesized_negative = amount_text.str.fullmatch(r"\(.*\)", na=False)
+amount_text = (
+    amount_text
+    .str.replace(r"(?i)\bUSD\b", "", regex=True)
+    .str.replace(r"[$,()]", "", regex=True)
+    .str.replace(r"[^0-9.\-]", "", regex=True)
+)
+anomaly_data["amount_usd"] = pd.to_numeric(amount_text, errors="coerce")
+anomaly_data.loc[parenthesized_negative, "amount_usd"] *= -1
+
+group_columns = [
+    "service_type",
+    "travel_class",
+    "destination_region",
+]
+
+# Hold out test bookings before calculating peer-group reference statistics.
+anomaly_train_data, anomaly_test_data = train_test_split(
+    anomaly_data,
+    test_size=0.20,
+    random_state=42,
+)
+
+# Learn comparable-booking amount references from training data only.
+positive_train = anomaly_train_data.loc[
+    anomaly_train_data["amount_usd"] > 0,
+    group_columns + ["amount_usd"],
+].copy()
+
+if positive_train.empty:
+    raise ValueError("No positive training booking amounts are available.")
+
+positive_train["log_amount"] = np.log(positive_train["amount_usd"])
+global_log_median = positive_train["log_amount"].median()
+global_log_mad = (
+    positive_train["log_amount"] - global_log_median
+).abs().median()
+
+# Avoid a zero or undefined scale in the robust deviation feature.
+if pd.isna(global_log_mad) or global_log_mad <= 0:
+    global_log_mad = 0.1
+
+group_stats = positive_train.groupby(group_columns)["log_amount"].agg(
+    group_median="median",
+    group_count="size",
+)
+group_stats["group_mad"] = positive_train.groupby(group_columns)[
+    "log_amount"
+].apply(lambda values: (values - values.median()).abs().median())
+
+group_stats_lookup = group_stats.to_dict("index")
+
+
+def build_anomaly_features(frame):
+    amount = pd.to_numeric(frame["amount_usd"], errors="coerce").astype(float)
+    log_amount = np.log(amount.where(amount > 0))
+
+    peer_medians = []
+    peer_mads = []
+
+    for key in frame[group_columns].itertuples(index=False, name=None):
+        stats = group_stats_lookup.get(tuple(key))
+
+        # Fall back to the global training reference for small/unseen groups.
+        if stats is None or stats["group_count"] < 20:
+            peer_medians.append(global_log_median)
+            peer_mads.append(global_log_mad)
+        else:
+            peer_medians.append(stats["group_median"])
+            group_mad = stats["group_mad"]
+            peer_mads.append(
+                global_log_mad
+                if pd.isna(group_mad) or group_mad <= 0
+                else group_mad
+            )
+
+    peer_median = np.asarray(peer_medians, dtype="float64")
+    peer_mad = np.asarray(peer_mads, dtype="float64")
+    log_deviation = log_amount.to_numpy() - peer_median
+    robust_scale = np.maximum(1.4826 * peer_mad, 0.05)
+
+    return pd.DataFrame(
+        {
+            "log_amount_abs": np.log1p(amount.abs()).to_numpy(),
+            "log_amount_deviation": log_deviation,
+            "robust_peer_deviation": np.abs(log_deviation) / robust_scale,
+            "amount_nonpositive": (
+                amount.notna() & amount.le(0)
+            ).astype("int8").to_numpy(),
+            "amount_missing": amount.isna().astype("int8").to_numpy(),
+        },
+        index=frame.index,
+    )
+
+
+X_anomaly_train = build_anomaly_features(anomaly_train_data)
+X_anomaly_test = build_anomaly_features(anomaly_test_data)
+anomaly_booking_id_test = anomaly_test_data["booking_id"].copy()
+
+# Fit the model using only training features. The answer key is not used.
+anomaly_model = Pipeline(steps=[
+    ("imputer", SimpleImputer(strategy="median")),
+    ("scaler", StandardScaler()),
+    ("isolation_forest", IsolationForest(
+        n_estimators=500,
+        contamination=0.02,
+        random_state=42,
+    )),
+])
+
+anomaly_model.fit(X_anomaly_train)
+
+print("Objective 5 Isolation Forest trained.")
+print("Training bookings:", len(X_anomaly_train))
+print("Test bookings reserved for prediction:", len(X_anomaly_test))
+print("Training feature count:", X_anomaly_train.shape[1])
+print("Answer key used:", False)
+```
+
+---
+
+## 15. Predict X_test
+
+Each model predicts the rows it never saw. Classifiers give a label and a probability. The cost model predicts a log amount that is converted back to dollars. The anomaly model gives a flag and a score, where higher means more unusual. The predictions are saved to CSV. Preview for the winning model of each objective:
+
+### Objective 1: Reduce booking cancellations
+
+| booking_id | actual_cancelled | predicted_cancelled | probability_cancelled | model_name |
+| --- | --- | --- | --- | --- |
+| BKG-301019 | 0 | 0 | 0.331 | Logistic Regression |
+| BKG-300843 | 0 | 1 | 0.577 | Logistic Regression |
+| BKG-305703 | 0 | 1 | 0.604 | Logistic Regression |
+| BKG-304073 | 0 | 0 | 0.383 | Logistic Regression |
+| BKG-300969 | 0 | 0 | 0.296 | Logistic Regression |
+
+```python
+import numpy as np
+import pandas as pd
+
+prediction_rows = []
+
+for model_name, model in trained_models.items():
+    predicted_labels = model.predict(X_test)
+    predicted_probabilities = model.predict_proba(X_test)
+
+    # Get the probability column corresponding to cancelled = 1.
+    cancelled_column = np.where(model.classes_ == 1)[0][0]
+
+    model_predictions = pd.DataFrame({
+        "booking_id": booking_id_test.to_numpy(),
+        "actual_cancelled": y_test.to_numpy(),
+        "predicted_cancelled": predicted_labels,
+        "probability_cancelled": predicted_probabilities[:, cancelled_column],
+        "model_name": model_name,
+    })
+
+    prediction_rows.append(model_predictions)
+
+all_cancellation_predictions = pd.concat(
+    prediction_rows,
+    ignore_index=True,
+)
+
+all_cancellation_predictions.to_csv(
+    "booking_cancellation_test_predictions.csv",
+    index=False,
+)
+
+print("Saved: booking_cancellation_test_predictions.csv")
+print("Prediction rows:", len(all_cancellation_predictions))
+display(all_cancellation_predictions.head(10))
+```
+
+### Objective 2: Forecast trip cost to improve client budgeting
+
+| booking_id | actual_amount_usd | predicted_amount_usd | model_name |
+| --- | --- | --- | --- |
+| BKG-300312 | 731.6 | 903.71 | Hist Gradient Boosting Regressor |
+| BKG-300304 | 2645.72 | 2580.48 | Hist Gradient Boosting Regressor |
+| BKG-304410 | 3046.08 | 2797.79 | Hist Gradient Boosting Regressor |
+| BKG-301593 | 3054.61 | 3168.67 | Hist Gradient Boosting Regressor |
+| BKG-301114 | 5650.1 | 5055.82 | Hist Gradient Boosting Regressor |
+
+```python
+import numpy as np
+import pandas as pd
+
+regression_prediction_rows = []
+
+# Convert the actual test targets from log dollars back to dollars.
+actual_amount_usd = np.exp(y_regression_test.to_numpy())
+
+for model_name, model in regression_models.items():
+    # Predict log(amount_usd), then convert predictions back to dollars.
+    predicted_log_amount = model.predict(X_regression_test)
+    predicted_amount_usd = np.exp(predicted_log_amount)
+
+    regression_prediction_rows.append(pd.DataFrame({
+        "booking_id": regression_id_test.to_numpy(),
+        "actual_amount_usd": actual_amount_usd,
+        "predicted_amount_usd": predicted_amount_usd,
+        "model_name": model_name,
+    }))
+
+all_regression_predictions = pd.concat(
+    regression_prediction_rows,
+    ignore_index=True,
+)
+
+all_regression_predictions.to_csv(
+    "trip_cost_test_predictions.csv",
+    index=False,
+)
+
+print("Saved: trip_cost_test_predictions.csv")
+print("Prediction rows:", len(all_regression_predictions))
+display(
+    all_regression_predictions
+    .groupby("model_name", group_keys=False)
+    .head(5)
+    .round(2)
+)
+```
+
+### Objective 3: Improve travel policy compliance
+
+| booking_id | actual_out_of_policy | predicted_out_of_policy | probability_out_of_policy | model_name |
+| --- | --- | --- | --- | --- |
+| BKG-304813 | 0 | 1 | 0.565 | Logistic Regression |
+| BKG-301026 | 0 | 1 | 0.58 | Logistic Regression |
+| BKG-303319 | 0 | 1 | 0.679 | Logistic Regression |
+| BKG-301786 | 1 | 0 | 0.333 | Logistic Regression |
+| BKG-302476 | 0 | 0 | 0.261 | Logistic Regression |
+
+```python
+import numpy as np
+import pandas as pd
+
+policy_prediction_rows = []
+
+for model_name, model in policy_models.items():
+    predicted_labels = model.predict(X_policy_test)
+    predicted_probabilities = model.predict_proba(X_policy_test)
+
+    out_of_policy_column = np.where(model.classes_ == 1)[0][0]
+
+    policy_prediction_rows.append(pd.DataFrame({
+        "booking_id": policy_id_test.to_numpy(),
+        "actual_out_of_policy": y_policy_test.to_numpy(),
+        "predicted_out_of_policy": predicted_labels,
+        "probability_out_of_policy": predicted_probabilities[
+            :, out_of_policy_column
+        ],
+        "model_name": model_name,
+    }))
+
+all_policy_predictions = pd.concat(
+    policy_prediction_rows,
+    ignore_index=True,
+)
+
+all_policy_predictions.to_csv(
+    "policy_compliance_test_predictions.csv",
+    index=False,
+)
+
+print("Saved: policy_compliance_test_predictions.csv")
+print("Prediction rows:", len(all_policy_predictions))
+display(all_policy_predictions.head(5))
+```
+
+### Objective 4: Raise customer satisfaction
+
+| ticket_id | actual_dissatisfied | predicted_dissatisfied | probability_dissatisfied | model_name |
+| --- | --- | --- | --- | --- |
+| TKT-500700 | 0 | 0 | 0.016 | Logistic Regression |
+| TKT-500809 | 0 | 0 | 0.273 | Logistic Regression |
+| TKT-502182 | 1 | 1 | 0.957 | Logistic Regression |
+| TKT-500016 | 1 | 1 | 0.999 | Logistic Regression |
+| TKT-501477 | 0 | 0 | 0.063 | Logistic Regression |
+
+```python
+satisfaction_prediction_rows = []
+
+for model_name, model in satisfaction_models.items():
+    predicted_labels = model.predict(X_satisfaction_test)
+    predicted_probabilities = model.predict_proba(X_satisfaction_test)
+
+    dissatisfied_column = np.where(model.classes_ == 1)[0][0]
+
+    satisfaction_prediction_rows.append(pd.DataFrame({
+        "ticket_id": satisfaction_id_test.to_numpy(),
+        "actual_dissatisfied": y_satisfaction_test.to_numpy(),
+        "predicted_dissatisfied": predicted_labels,
+        "probability_dissatisfied": predicted_probabilities[
+            :, dissatisfied_column
+        ],
+        "model_name": model_name,
+    }))
+
+all_satisfaction_predictions = pd.concat(
+    satisfaction_prediction_rows,
+    ignore_index=True,
+)
+
+all_satisfaction_predictions.to_csv(
+    "customer_satisfaction_test_predictions.csv",
+    index=False,
+)
+
+print("Saved: customer_satisfaction_test_predictions.csv")
+print("Prediction rows:", len(all_satisfaction_predictions))
+display(all_satisfaction_predictions.head(5))
+```
+
+### Objective 5: Detect booking amount anomalies and billing errors
+
+| booking_id | predicted_anomaly | anomaly_score |
+| --- | --- | --- |
+| BKG-303085 | 1 | 0.124 |
+| BKG-300445 | 1 | 0.092 |
+| BKG-305379 | 1 | 0.09 |
+| BKG-300082 | 1 | 0.089 |
+| BKG-301497 | 1 | 0.089 |
+
+```python
+import pandas as pd
+
+# Isolation Forest labels: -1 = anomaly, 1 = normal.
+isolation_labels = anomaly_model.predict(X_anomaly_test)
+
+# Higher scores indicate observations more likely to be anomalous.
+anomaly_scores = -anomaly_model.decision_function(X_anomaly_test)
+
+anomaly_test_predictions = pd.DataFrame({
+    "booking_id": anomaly_booking_id_test.to_numpy(),
+    "predicted_anomaly": (isolation_labels == -1).astype("int8"),
+    "anomaly_score": anomaly_scores,
+})
+
+anomaly_test_predictions.to_csv(
+    "booking_anomaly_test_predictions.csv",
+    index=False,
+)
+
+print("Saved: booking_anomaly_test_predictions.csv")
+print("Test bookings predicted:", len(anomaly_test_predictions))
+print(
+    "Bookings flagged as anomalous:",
+    int(anomaly_test_predictions["predicted_anomaly"].sum()),
+)
+
+display(
+    anomaly_test_predictions
+    .sort_values("anomaly_score", ascending=False)
+    .head(5)
+)
+```
+
+---
+
+## 16. Compare X and y
+
+Here the predictions are lined up against the truth, row by row. It is the quickest way to see where a model is right and wrong before trusting a score.
+
+One lesson from this step: **raw accuracy is a poor judge when the outcome is rare.** In Objective 1 the Random Forest has the most correct predictions (823 of 1,200) simply because it flags fewer bookings, while Logistic Regression has the fewest (744) but catches the most cancellations. That is why the final choice uses average precision and recall, not accuracy.
+
+### Objective 1: Reduce booking cancellations
+
+| model_name | booking_id | actual_cancelled | predicted_cancelled | probability_cancelled | correct_prediction |
+| --- | --- | --- | --- | --- | --- |
+| Logistic Regression | BKG-301019 | 0 | 0 | 0.331 | True |
+| Logistic Regression | BKG-300843 | 0 | 1 | 0.577 | False |
+| Logistic Regression | BKG-305703 | 0 | 1 | 0.604 | False |
+| Logistic Regression | BKG-304073 | 0 | 0 | 0.383 | True |
+| Logistic Regression | BKG-300969 | 0 | 0 | 0.296 | True |
+
+**Correct and incorrect predictions by model**
+
+| model_name | test_bookings | correct_predictions | incorrect_predictions |
+| --- | --- | --- | --- |
+| Hist Gradient Boosting | 1200 | 774 | 426 |
+| Logistic Regression | 1200 | 744 | 456 |
+| Random Forest | 1200 | 823 | 377 |
+
+```python
+# Compare actual and predicted cancellation labels
+cancellation_comparison = all_cancellation_predictions[
+    [
+        "model_name",
+        "booking_id",
+        "actual_cancelled",
+        "predicted_cancelled",
+        "probability_cancelled",
+    ]
+].copy()
+
+cancellation_comparison["correct_prediction"] = (
+    cancellation_comparison["actual_cancelled"]
+    == cancellation_comparison["predicted_cancelled"]
+)
+
+print("First 10 comparisons for each model:")
+display(
+    cancellation_comparison
+    .groupby("model_name", group_keys=False)
+    .head(5)
+)
+
+print("\nCorrect and incorrect predictions by model:")
+display(
+    cancellation_comparison
+    .groupby("model_name")
+    .agg(
+        test_bookings=("correct_prediction", "size"),
+        correct_predictions=("correct_prediction", "sum"),
+        incorrect_predictions=(
+            "correct_prediction",
+            lambda values: (~values).sum(),
+        ),
+    )
+)
+```
+
+### Objective 2: Forecast trip cost to improve client budgeting
+
+| booking_id | actual_amount_usd | predicted_amount_usd | model_name |
+| --- | --- | --- | --- |
+| BKG-300312 | 731.6 | 903.71 | Hist Gradient Boosting Regressor |
+| BKG-300304 | 2645.72 | 2580.48 | Hist Gradient Boosting Regressor |
+| BKG-304410 | 3046.08 | 2797.79 | Hist Gradient Boosting Regressor |
+| BKG-301593 | 3054.61 | 3168.67 | Hist Gradient Boosting Regressor |
+| BKG-301114 | 5650.1 | 5055.82 | Hist Gradient Boosting Regressor |
+
+```python
+import numpy as np
+import pandas as pd
+
+regression_prediction_rows = []
+
+# Convert the log-transformed actual test target back to dollars.
+actual_amount_usd = np.exp(y_regression_test.to_numpy())
+
+for model_name, model in regression_models.items():
+    predicted_log_amount = model.predict(X_regression_test)
+    predicted_amount_usd = np.exp(predicted_log_amount)
+
+    regression_prediction_rows.append(pd.DataFrame({
+        "booking_id": regression_id_test.to_numpy(),
+        "actual_amount_usd": actual_amount_usd,
+        "predicted_amount_usd": predicted_amount_usd,
+        "actual_log_amount": y_regression_test.to_numpy(),
+        "predicted_log_amount": predicted_log_amount,
+        "model_name": model_name,
+    }))
+
+all_regression_predictions = pd.concat(
+    regression_prediction_rows,
+    ignore_index=True,
+)
+
+print("Actual versus predicted trip costs (first 10 rows per model):")
+display(
+    all_regression_predictions
+    .groupby("model_name", group_keys=False)
+    .head(5)
+    .round(2)
+)
+```
+
+### Objective 3: Improve travel policy compliance
+
+| model_name | booking_id | actual_out_of_policy | predicted_out_of_policy | probability_out_of_policy | correct_prediction |
+| --- | --- | --- | --- | --- | --- |
+| Logistic Regression | BKG-304813 | 0 | 1 | 0.565 | False |
+| Logistic Regression | BKG-301026 | 0 | 1 | 0.58 | False |
+| Logistic Regression | BKG-303319 | 0 | 1 | 0.679 | False |
+| Logistic Regression | BKG-301786 | 1 | 0 | 0.333 | False |
+| Logistic Regression | BKG-302476 | 0 | 0 | 0.261 | True |
+
+**Correct and incorrect predictions by model**
+
+| model_name | test_bookings | correct_predictions | incorrect_predictions |
+| --- | --- | --- | --- |
+| Hist Gradient Boosting | 1200 | 804 | 396 |
+| Logistic Regression | 1200 | 788 | 412 |
+| Random Forest | 1200 | 779 | 421 |
+
+```python
+policy_comparison = all_policy_predictions[
+    [
+        "model_name",
+        "booking_id",
+        "actual_out_of_policy",
+        "predicted_out_of_policy",
+        "probability_out_of_policy",
+    ]
+].copy()
+
+policy_comparison["correct_prediction"] = (
+    policy_comparison["actual_out_of_policy"]
+    == policy_comparison["predicted_out_of_policy"]
+)
+
+print("Actual vs. predicted (first 10 rows per model):")
+display(
+    policy_comparison
+    .groupby("model_name", group_keys=False)
+    .head(5)
+)
+
+print("Correct and incorrect predictions by model:")
+display(
+    policy_comparison
+    .groupby("model_name")
+    .agg(
+        test_bookings=("correct_prediction", "size"),
+        correct_predictions=("correct_prediction", "sum"),
+        incorrect_predictions=(
+            "correct_prediction",
+            lambda values: (~values).sum(),
+        ),
+    )
+)
+```
+
+### Objective 4: Raise customer satisfaction
+
+| model_name | ticket_id | actual_dissatisfied | predicted_dissatisfied | probability_dissatisfied | correct_prediction |
+| --- | --- | --- | --- | --- | --- |
+| Logistic Regression | TKT-500700 | 0 | 0 | 0.016 | True |
+| Logistic Regression | TKT-500809 | 0 | 0 | 0.273 | True |
+| Logistic Regression | TKT-502182 | 1 | 1 | 0.957 | True |
+| Logistic Regression | TKT-500016 | 1 | 1 | 0.999 | True |
+| Logistic Regression | TKT-501477 | 0 | 0 | 0.063 | True |
+
+**Correct and incorrect predictions by model**
+
+| model_name | test_tickets | correct_predictions | incorrect_predictions |
+| --- | --- | --- | --- |
+| Hist Gradient Boosting | 486 | 412 | 74 |
+| Logistic Regression | 486 | 424 | 62 |
+| Random Forest | 486 | 419 | 67 |
+
+```python
+satisfaction_comparison = all_satisfaction_predictions[
+    [
+        "model_name",
+        "ticket_id",
+        "actual_dissatisfied",
+        "predicted_dissatisfied",
+        "probability_dissatisfied",
+    ]
+].copy()
+
+satisfaction_comparison["correct_prediction"] = (
+    satisfaction_comparison["actual_dissatisfied"]
+    == satisfaction_comparison["predicted_dissatisfied"]
+)
+
+print("Actual vs. predicted (first 10 rows per model):")
+display(
+    satisfaction_comparison
+    .groupby("model_name", group_keys=False)
+    .head(5)
+)
+
+print("Correct and incorrect predictions by model:")
+display(
+    satisfaction_comparison
+    .groupby("model_name")
+    .agg(
+        test_tickets=("correct_prediction", "size"),
+        correct_predictions=("correct_prediction", "sum"),
+        incorrect_predictions=(
+            "correct_prediction",
+            lambda values: (~values).sum(),
+        ),
+    )
+)
+```
+
+### Objective 5: Detect booking amount anomalies and billing errors
+
+**Bookings flagged as anomalous (top 8 by score)**
+
+| booking_id | service_type | travel_class | destination_region | amount_usd | anomaly_score |
+| --- | --- | --- | --- | --- | --- |
+| BKG-303085 | flight | business | Africa | 21169.4 | 0.124 |
+| BKG-300445 | flight | business | Africa | 13364.3 | 0.092 |
+| BKG-305379 | car rental | economy | North America | 3668.85 | 0.09 |
+| BKG-300082 | flight | economy | Southeast Asia | 5635.63 | 0.089 |
+| BKG-301497 | flight | economy | Europe | 6435.7 | 0.089 |
+| BKG-300711 | hotel | suite | South America | 20644.6 | 0.081 |
+| BKG-301609 | hotel | suite | South America | 20449.9 | 0.079 |
+| BKG-302203 | car rental | suv | Southeast Asia | 73.47 | 0.073 |
+
+```python
+# Show each test booking's input features alongside its anomaly prediction.
+anomaly_comparison = anomaly_test_data[
+    [
+        "booking_id",
+        "service_type",
+        "travel_class",
+        "destination_region",
+        "amount_usd",
+    ]
+].copy()
+
+# Add the numeric features supplied to Isolation Forest.
+anomaly_comparison = anomaly_comparison.join(X_anomaly_test)
+
+# Add the model's flag and anomaly score for each booking.
+anomaly_comparison = anomaly_comparison.merge(
+    anomaly_test_predictions[
+        ["booking_id", "predicted_anomaly", "anomaly_score"]
+    ],
+    on="booking_id",
+    how="left",
+    validate="one_to_one",
+)
+
+print("Test features alongside predictions:")
+display(
+    anomaly_comparison
+    .sort_values("anomaly_score", ascending=False)
+    .head(5)
+)
+
+print("Bookings flagged as anomalous:")
+display(
+    anomaly_comparison
+    .loc[anomaly_comparison["predicted_anomaly"] == 1]
+    .sort_values("anomaly_score", ascending=False)
+)
+```
+
+---
+
+## 17. Evaluate Model
+
+Metrics are chosen to fit each problem. For the three classifiers I ranked models by **average precision**, which suits rare outcomes, and checked balanced accuracy, precision, recall, F1 and ROC AUC. For cost I used **mean absolute error in dollars**. For anomalies I scored the flags against the answer key at the very end.
+
+### Objective 1: Reduce booking cancellations
+
+| model | balanced_accuracy | precision_cancelled | recall_cancelled | f1_cancelled | roc_auc | average_precision |
+| --- | --- | --- | --- | --- | --- | --- |
+| Logistic Regression | 0.608 | 0.245 | 0.59 | 0.347 | 0.633 | 0.253 |
+| Random Forest | 0.553 | 0.228 | 0.351 | 0.276 | 0.584 | 0.232 |
+| Hist Gradient Boosting | 0.554 | 0.217 | 0.415 | 0.285 | 0.583 | 0.221 |
+
+Logistic Regression wins on average precision (0.253) and catches 121 of 205 cancellations (59%). Precision is low at 24.5%, so most flagged bookings will not cancel. This is a weak signal and the app treats it that way.
+
+```python
+import pandas as pd
+from sklearn.metrics import (
+    average_precision_score,
+    balanced_accuracy_score,
+    confusion_matrix,
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+)
+
+evaluation_rows = []
+
+for model_name, model_data in all_cancellation_predictions.groupby("model_name"):
+    y_true = model_data["actual_cancelled"]
+    y_pred = model_data["predicted_cancelled"]
+    y_prob = model_data["probability_cancelled"]
+
+    tn, fp, fn, tp = confusion_matrix(
+        y_true,
+        y_pred,
+        labels=[0, 1],
+    ).ravel()
+
+    evaluation_rows.append({
+        "model": model_name,
+        "balanced_accuracy": balanced_accuracy_score(y_true, y_pred),
+        "precision_cancelled": precision_score(
+            y_true, y_pred, pos_label=1, zero_division=0
+        ),
+        "recall_cancelled": recall_score(
+            y_true, y_pred, pos_label=1, zero_division=0
+        ),
+        "f1_cancelled": f1_score(
+            y_true, y_pred, pos_label=1, zero_division=0
+        ),
+        "roc_auc": roc_auc_score(y_true, y_prob),
+        "average_precision": average_precision_score(y_true, y_prob),
+        "true_negatives": tn,
+        "false_positives": fp,
+        "false_negatives": fn,
+        "true_positives": tp,
+    })
+
+cancellation_evaluation = (
+    pd.DataFrame(evaluation_rows)
+    .sort_values("average_precision", ascending=False)
+    .reset_index(drop=True)
+)
+
+display(cancellation_evaluation.round(3))
+```
+
+### Objective 2: Forecast trip cost to improve client budgeting
+
+| model | MAE_USD | RMSE_USD | R2 | WAPE |
+| --- | --- | --- | --- | --- |
+| Hist Gradient Boosting Regressor | 231.85 | 1012.34 | 0.506 | 0.184 |
+| Random Forest Regressor | 251.397 | 1029.19 | 0.49 | 0.2 |
+| Linear Regression | 373.648 | 1075.67 | 0.443 | 0.297 |
+
+Hist Gradient Boosting is the most accurate: typical error $232, or 18.4% of spend, and R-squared 0.51. Half of all predictions are within about $78. The RMSE of $1,012 shows a tail of large bookings that are hard to predict.
+
+```python
+import numpy as np
+import pandas as pd
+from sklearn.metrics import (
+    mean_absolute_error,
+    mean_squared_error,
+    r2_score,
+)
+
+regression_evaluation_rows = []
+
+for model_name, model_data in all_regression_predictions.groupby("model_name"):
+    y_true_usd = model_data["actual_amount_usd"]
+    y_pred_usd = model_data["predicted_amount_usd"]
+
+    regression_evaluation_rows.append({
+        "model": model_name,
+        "MAE_USD": mean_absolute_error(y_true_usd, y_pred_usd),
+        "RMSE_USD": np.sqrt(mean_squared_error(y_true_usd, y_pred_usd)),
+        "R2": r2_score(y_true_usd, y_pred_usd),
+        "WAPE": (
+            np.abs(y_true_usd - y_pred_usd).sum()
+            / y_true_usd.sum()
+        ),
+    })
+
+regression_evaluation = (
+    pd.DataFrame(regression_evaluation_rows)
+    .sort_values("MAE_USD")
+    .reset_index(drop=True)
+)
+
+display(regression_evaluation.round(3))
+```
+
+### Objective 3: Improve travel policy compliance
+
+| model | balanced_accuracy | precision_out_of_policy | recall_out_of_policy | f1_out_of_policy | roc_auc | average_precision |
+| --- | --- | --- | --- | --- | --- | --- |
+| Logistic Regression | 0.646 | 0.401 | 0.622 | 0.488 | 0.68 | 0.452 |
+| Hist Gradient Boosting | 0.628 | 0.404 | 0.54 | 0.462 | 0.677 | 0.441 |
+| Random Forest | 0.622 | 0.385 | 0.565 | 0.458 | 0.673 | 0.425 |
+
+Logistic Regression wins with average precision 0.452. It catches 196 of 315 out-of-policy bookings (62%) with 40% precision. Useful for choosing what to review first, not for deciding compliance.
+
+```python
+import numpy as np
+import pandas as pd
+from sklearn.metrics import (
+    average_precision_score,
+    balanced_accuracy_score,
+    confusion_matrix,
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+)
+
+policy_evaluation_rows = []
+
+for model_name, model_data in all_policy_predictions.groupby("model_name"):
+    y_true = model_data["actual_out_of_policy"]
+    y_pred = model_data["predicted_out_of_policy"]
+    y_prob = model_data["probability_out_of_policy"]
+
+    tn, fp, fn, tp = confusion_matrix(
+        y_true, y_pred, labels=[0, 1]
+    ).ravel()
+
+    policy_evaluation_rows.append({
+        "model": model_name,
+        "balanced_accuracy": balanced_accuracy_score(y_true, y_pred),
+        "precision_out_of_policy": precision_score(
+            y_true, y_pred, pos_label=1, zero_division=0
+        ),
+        "recall_out_of_policy": recall_score(
+            y_true, y_pred, pos_label=1, zero_division=0
+        ),
+        "f1_out_of_policy": f1_score(
+            y_true, y_pred, pos_label=1, zero_division=0
+        ),
+        "roc_auc": (
+            roc_auc_score(y_true, y_prob)
+            if y_true.nunique() == 2 else np.nan
+        ),
+        "average_precision": (
+            average_precision_score(y_true, y_prob)
+            if y_true.nunique() == 2 else np.nan
+        ),
+        "true_negatives": tn,
+        "false_positives": fp,
+        "false_negatives": fn,
+        "true_positives": tp,
+    })
+
+policy_evaluation = (
+    pd.DataFrame(policy_evaluation_rows)
+    .sort_values("average_precision", ascending=False)
+    .reset_index(drop=True)
+)
+
+display(policy_evaluation.round(3))
+```
+
+### Objective 4: Raise customer satisfaction
+
+| model | balanced_accuracy | precision_dissatisfied | recall_dissatisfied | f1_dissatisfied | roc_auc | average_precision |
+| --- | --- | --- | --- | --- | --- | --- |
+| Logistic Regression | 0.866 | 0.731 | 0.851 | 0.786 | 0.945 | 0.893 |
+| Random Forest | 0.849 | 0.719 | 0.821 | 0.767 | 0.929 | 0.873 |
+| Hist Gradient Boosting | 0.828 | 0.7 | 0.784 | 0.739 | 0.926 | 0.861 |
+
+The strongest result: 114 of 134 dissatisfied tickets caught (85%), 73% precision, ROC AUC 0.945 and 424 of 486 tickets classified correctly. Remember that resolution time and escalation help here, so it works best on closing tickets.
+
+```python
+satisfaction_evaluation_rows = []
+
+for model_name, model_data in all_satisfaction_predictions.groupby("model_name"):
+    y_true = model_data["actual_dissatisfied"]
+    y_pred = model_data["predicted_dissatisfied"]
+    y_prob = model_data["probability_dissatisfied"]
+
+    tn, fp, fn, tp = confusion_matrix(
+        y_true, y_pred, labels=[0, 1]
+    ).ravel()
+
+    satisfaction_evaluation_rows.append({
+        "model": model_name,
+        "balanced_accuracy": balanced_accuracy_score(y_true, y_pred),
+        "precision_dissatisfied": precision_score(
+            y_true, y_pred, pos_label=1, zero_division=0
+        ),
+        "recall_dissatisfied": recall_score(
+            y_true, y_pred, pos_label=1, zero_division=0
+        ),
+        "f1_dissatisfied": f1_score(
+            y_true, y_pred, pos_label=1, zero_division=0
+        ),
+        "roc_auc": (
+            roc_auc_score(y_true, y_prob)
+            if y_true.nunique() == 2 else np.nan
+        ),
+        "average_precision": (
+            average_precision_score(y_true, y_prob)
+            if y_true.nunique() == 2 else np.nan
+        ),
+        "true_negatives": tn,
+        "false_positives": fp,
+        "false_negatives": fn,
+        "true_positives": tp,
+    })
+
+satisfaction_evaluation = (
+    pd.DataFrame(satisfaction_evaluation_rows)
+    .sort_values("average_precision", ascending=False)
+    .reset_index(drop=True)
+)
+
+display(satisfaction_evaluation.round(3))
+```
+
+### Objective 5: Detect booking amount anomalies and billing errors
+
+| Metric | Value |
+| --- | ---: |
+| Test bookings | 1,200 |
+| Actual anomalies | 18 |
+| Flagged | 23 |
+| Precision | 0.565 |
+| Recall | 0.722 |
+| F1 | 0.634 |
+| Balanced accuracy | 0.857 |
+| ROC AUC | 0.947 |
+| Average precision | 0.678 |
+
+13 of 18 planted anomalies found, with 10 false alarms among 1,182 normal bookings. Only 18 anomalies were in the test set, so treat the numbers as a guide, not a guarantee.
+
+```python
+from pathlib import Path
+
+import pandas as pd
+from sklearn.metrics import (
+    average_precision_score,
+    balanced_accuracy_score,
+    confusion_matrix,
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+)
+
+answer_key = pd.read_csv(
+    Path("travel_mgmt_raw") / "anomaly_answer_key.csv"
+)
+
+# Normalize IDs and labels before matching the held-out predictions.
+predictions = anomaly_test_predictions.copy()
+predictions["booking_id"] = (
+    predictions["booking_id"].astype("string").str.strip().str.upper()
+)
+
+answer_key["booking_id"] = (
+    answer_key["booking_id"].astype("string").str.strip().str.upper()
+)
+answer_key["is_anomaly"] = pd.to_numeric(
+    answer_key["is_anomaly"], errors="raise"
+).astype("int8")
+
+if predictions["booking_id"].duplicated().any():
+    raise ValueError("Test predictions contain duplicate booking IDs.")
+if answer_key["booking_id"].duplicated().any():
+    raise ValueError("The anomaly answer key contains duplicate booking IDs.")
+if not answer_key["is_anomaly"].isin([0, 1]).all():
+    raise ValueError("Answer-key labels must be 0 (normal) or 1 (anomaly).")
+
+# Match answer-key labels only to the held-out test bookings.
+evaluation_data = predictions.merge(
+    answer_key[["booking_id", "is_anomaly"]],
+    on="booking_id",
+    how="left",
+    validate="one_to_one",
+)
+
+if len(evaluation_data) != len(predictions):
+    raise ValueError("Matching with the answer key changed the test row count.")
+if evaluation_data["is_anomaly"].isna().any():
+    raise ValueError("Some test bookings are missing answer-key labels.")
+
+y_true = evaluation_data["is_anomaly"]
+y_pred = evaluation_data["predicted_anomaly"]
+y_score = evaluation_data["anomaly_score"]
+
+if y_true.nunique() != 2:
+    raise ValueError(
+        "ROC AUC and average precision require both normal and anomalous "
+        "bookings in the test set."
+    )
+
+tn, fp, fn, tp = confusion_matrix(
+    y_true,
+    y_pred,
+    labels=[0, 1],
+).ravel()
+
+print("Objective 5 — held-out anomaly detection evaluation")
+print("Test bookings:", len(evaluation_data))
+print("Actual anomalies:", int(y_true.sum()))
+print("Bookings flagged:", int(y_pred.sum()))
+print(f"Anomaly prevalence: {y_true.mean():.3%}")
+print(f"Precision: {precision_score(y_true, y_pred, zero_division=0):.3f}")
+print(f"Recall: {recall_score(y_true, y_pred, zero_division=0):.3f}")
+print(f"F1 score: {f1_score(y_true, y_pred, zero_division=0):.3f}")
+print(f"Balanced accuracy: {balanced_accuracy_score(y_true, y_pred):.3f}")
+print(f"ROC AUC: {roc_auc_score(y_true, y_score):.3f}")
+print(f"Average precision: {average_precision_score(y_true, y_score):.3f}")
+
+print("\nConfusion matrix (rows = actual, columns = predicted; labels [0, 1]):")
+print([[tn, fp], [fn, tp]])
+```
+
+**Models chosen**
+
+| # | Objective | Chosen model | Why |
+| --- | --- | --- | --- |
+| 1 | Cancellations | Logistic Regression | Highest average precision (0.253) |
+| 2 | Trip cost | Hist Gradient Boosting | Lowest error (MAE $231.85) |
+| 3 | Policy compliance | Logistic Regression | Highest average precision (0.452) |
+| 4 | Satisfaction | Logistic Regression | Highest average precision (0.893) |
+| 5 | Anomalies | Isolation Forest | Only detector tested; scored against the answer key |
+
+These are the best of the candidates tested, not a claim that nothing better exists. Each result comes from one held-out sample.
+
+---
+
+## 18. Business Analysis
+
+Before reading model scores, here is where each problem sits in the business. These charts describe the data; they are associations, not proof of cause.
+
+### Objective 1: Reduce booking cancellations
+
+<p align="center"><img src="images/travel_business_01_cancellations.png" alt="Cancellation rate by channel and service" width="100%"></p>
+
+**17.6%** of completed or cancelled bookings cancel. Travel-agent bookings cancel most (21.3%) and mobile-app bookings least (14.0%). Car rentals (20.2%) and flights (19.4%) cancel more than hotels (14.3%).
+
+### Objective 2: Forecast trip cost
+
+<p align="center"><img src="images/travel_business_02_trip_cost.png" alt="Spend and median amount by service" width="100%"></p>
+
+Flights carry **$5.05M** of the spend and have a median booking of $1,107. Hotels follow with $2.60M and car rentals are small at $0.20M. Cost accuracy matters most on flights.
+
+### Objective 3: Improve policy compliance
+
+<p align="center"><img src="images/travel_business_03_policy_compliance.png" alt="Out-of-policy rate by channel and class" width="100%"></p>
+
+**26.2%** of bookings are out of policy. Phone (34.3%) and travel-agent (31.4%) bookings break policy far more than the online tool (20.6%). Premium cabins and rooms stand out: first class 43.7%, suites 41.0%, business 39.0%, against 18.8% for standard rooms.
+
+### Objective 4: Raise customer satisfaction
+
+<p align="center"><img src="images/travel_business_04_customer_satisfaction.png" alt="Dissatisfaction by category and channel" width="100%"></p>
+
+Complaints (56.2%) and billing disputes (29.6%) sit above the 27.6% average. Chat is the only channel well below it (9.4%).
+
+### Objective 5: Detect booking amount anomalies
+
+<p align="center"><img src="images/travel_business_05_anomalies.png" alt="Anomaly rate by service and median amount" width="100%"></p>
+
+138 of 6,000 bookings (2.3%) are planted anomalies, spread evenly across services. Their median amount is **$4,688** against $929 for normal bookings, so an amount far from its peers is the signal to look for.
+
+### Full code
+
+```python
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+RAW_DIR = Path("travel_mgmt_raw")
+CLEAN_DIR = Path("travel_mgmt_clean")
+
+
+def normalize_category(series):
+    return (
+        series.astype("string")
+        .str.strip()
+        .str.replace(r"\s+", " ", regex=True)
+        .str.casefold()
+    )
+
+
+def plot_rate_bars(axis, table, title, ylabel, color):
+    bars = axis.bar(table.index.astype(str), table["rate"] * 100, color=color)
+    axis.set_title(title, fontsize=12, weight="bold")
+    axis.set_ylabel(ylabel)
+    axis.set_ylim(0, max(10, float(table["rate"].max() * 120)))
+    axis.tick_params(axis="x", rotation=25)
+    axis.grid(axis="y", alpha=0.25)
+    for bar, rate, count in zip(bars, table["rate"], table["rows"]):
+        axis.annotate(
+            f"{rate:.1%}\n(n={count:,})",
+            (bar.get_x() + bar.get_width() / 2, bar.get_height()),
+            xytext=(0, 4),
+            textcoords="offset points",
+            ha="center",
+            va="bottom",
+            fontsize=8,
+        )
+
+
+def rate_by_group(frame, group_column, target_column, minimum_rows=100):
+    return (
+        frame.groupby(group_column, dropna=False)[target_column]
+        .agg(rows="size", rate="mean")
+        .query("rows >= @minimum_rows")
+        .sort_values("rate", ascending=False)
+    )
+
+
+bookings = pd.read_csv(CLEAN_DIR / "fact_bookings.csv")
+bookings["service"] = normalize_category(bookings["service_type"])
+bookings["channel"] = normalize_category(bookings["booking_channel"]).replace(
+    {"onlinetool": "online tool"}
+)
+bookings["travel_class_group"] = normalize_category(bookings["travel_class"])
+bookings["status"] = normalize_category(bookings["booking_status"]).replace(
+    {"canceled": "cancelled", "no show": "no-show"}
+)
+bookings["amount_usd"] = pd.to_numeric(
+    bookings["amount_usd"]
+    .astype("string")
+    .str.replace(r"[^0-9.\-]", "", regex=True),
+    errors="coerce",
+)
+
+# 1. Cancellation: compare completed/cancelled bookings; exclude no-shows.
+cancellation_data = bookings.loc[
+    bookings["status"].isin(["completed", "cancelled"])
+].copy()
+cancellation_data["cancelled"] = cancellation_data["status"].eq("cancelled").astype(int)
+cancellation_by_channel = rate_by_group(cancellation_data, "channel", "cancelled")
+cancellation_by_service = rate_by_group(cancellation_data, "service", "cancelled")
+
+fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+plot_rate_bars(
+    axes[0], cancellation_by_channel, "Cancellation rate by booking channel",
+    "Cancelled bookings (%)", "#4472C4",
+)
+plot_rate_bars(
+    axes[1], cancellation_by_service, "Cancellation rate by service",
+    "Cancelled bookings (%)", "#5B9BD5",
+)
+fig.suptitle(
+    f"Objective 1 — Reduce cancellations ({cancellation_data['cancelled'].mean():.1%} overall)",
+    fontsize=15, weight="bold",
+)
+fig.tight_layout()
+plt.show()
+
+# 2. Cost forecasting: show where positive booking spend is concentrated.
+positive_spend = bookings.loc[bookings["amount_usd"].gt(0)]
+spend_by_service = (
+    positive_spend.groupby("service")["amount_usd"]
+    .agg(total_spend="sum", median_booking="median", bookings="size")
+    .sort_values("total_spend", ascending=False)
+)
+fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+spend_millions = spend_by_service["total_spend"] / 1_000_000
+bars = axes[0].bar(spend_by_service.index, spend_millions, color="#70AD47")
+axes[0].set_title("Positive booking spend by service", weight="bold")
+axes[0].set_ylabel("Total spend (USD millions)")
+axes[0].tick_params(axis="x", rotation=20)
+axes[0].grid(axis="y", alpha=0.25)
+for bar, value in zip(bars, spend_millions):
+    axes[0].annotate(
+        f"${value:.2f}M", (bar.get_x() + bar.get_width() / 2, bar.get_height()),
+        xytext=(0, 4), textcoords="offset points", ha="center", fontsize=9,
+    )
+bars = axes[1].bar(
+    spend_by_service.index, spend_by_service["median_booking"], color="#A5A5A5"
+)
+axes[1].set_title("Median booking amount by service", weight="bold")
+axes[1].set_ylabel("Median amount (USD)")
+axes[1].tick_params(axis="x", rotation=20)
+axes[1].grid(axis="y", alpha=0.25)
+for bar, value in zip(bars, spend_by_service["median_booking"]):
+    axes[1].annotate(
+        f"${value:,.0f}", (bar.get_x() + bar.get_width() / 2, bar.get_height()),
+        xytext=(0, 4), textcoords="offset points", ha="center", fontsize=9,
+    )
+fig.suptitle(
+    f"Objective 2 — Forecast trip cost ({len(positive_spend):,} positive amounts)",
+    fontsize=15, weight="bold",
+)
+fig.tight_layout()
+plt.show()
+
+# 3. Policy compliance: compare noncompliance by channel and travel class.
+bookings["policy"] = normalize_category(bookings["policy_compliant"]).replace(
+    {"y": "yes", "true": "yes", "1": "yes", "n": "no", "false": "no", "0": "no"}
+)
+policy_data = bookings.loc[bookings["policy"].isin(["yes", "no"])].copy()
+policy_data["out_of_policy"] = policy_data["policy"].eq("no").astype(int)
+policy_by_channel = rate_by_group(policy_data, "channel", "out_of_policy")
+policy_by_class = rate_by_group(
+    policy_data, "travel_class_group", "out_of_policy"
+)
+fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+plot_rate_bars(
+    axes[0], policy_by_channel, "Out-of-policy rate by booking channel",
+    "Out-of-policy bookings (%)", "#ED7D31",
+)
+plot_rate_bars(
+    axes[1], policy_by_class, "Out-of-policy rate by travel class",
+    "Out-of-policy bookings (%)", "#FFC000",
+)
+fig.suptitle(
+    f"Objective 3 — Improve policy compliance ({policy_data['out_of_policy'].mean():.1%} overall)",
+    fontsize=15, weight="bold",
+)
+fig.tight_layout()
+plt.show()
+
+# 4. Satisfaction: compare dissatisfaction by ticket category and channel.
+tickets = pd.read_csv(CLEAN_DIR / "fact_support_tickets.csv")
+tickets["csat_score"] = pd.to_numeric(tickets["csat_score"], errors="coerce")
+tickets = tickets.loc[tickets["csat_score"].between(1, 5)].copy()
+tickets["dissatisfied"] = tickets["csat_score"].le(2).astype(int)
+tickets["category_group"] = normalize_category(tickets["category"])
+tickets["contact_channel_group"] = normalize_category(tickets["contact_channel"])
+satisfaction_by_category = rate_by_group(
+    tickets, "category_group", "dissatisfied", minimum_rows=20
+)
+satisfaction_by_channel = rate_by_group(
+    tickets, "contact_channel_group", "dissatisfied", minimum_rows=20
+)
+overall_dissatisfaction = tickets["dissatisfied"].mean()
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+plot_rate_bars(
+    axes[0], satisfaction_by_category, "Dissatisfaction by ticket category",
+    "Dissatisfied tickets (%)", "#C00000",
+)
+plot_rate_bars(
+    axes[1], satisfaction_by_channel, "Dissatisfaction by contact channel",
+    "Dissatisfied tickets (%)", "#ED7D31",
+)
+for axis in axes:
+    axis.axhline(
+        overall_dissatisfaction * 100, color="#404040", linestyle="--",
+        linewidth=1.5, label=f"Overall {overall_dissatisfaction:.1%}",
+    )
+    axis.legend()
+fig.suptitle(
+    f"Objective 4 — Raise customer satisfaction ({len(tickets):,} labeled tickets)",
+    fontsize=15, weight="bold",
+)
+fig.tight_layout()
+plt.show()
+
+# 5. Amount anomalies: use answer-key labels only for retrospective analysis.
+answer_key = pd.read_csv(RAW_DIR / "anomaly_answer_key.csv")
+answer_key["booking_id"] = (
+    answer_key["booking_id"].astype("string").str.strip().str.upper()
+)
+bookings["booking_id"] = (
+    bookings["booking_id"].astype("string").str.strip().str.upper()
+)
+answer_key["is_anomaly"] = pd.to_numeric(
+    answer_key["is_anomaly"], errors="raise"
+).astype(int)
+if answer_key["booking_id"].duplicated().any():
+    raise ValueError("Anomaly answer key contains duplicate booking IDs.")
+anomaly_data = bookings.merge(
+    answer_key[["booking_id", "is_anomaly"]],
+    on="booking_id", how="left", validate="one_to_one",
+)
+if anomaly_data["is_anomaly"].isna().any():
+    raise ValueError("Some bookings are missing anomaly answer-key labels.")
+anomaly_by_service = (
+    anomaly_data.groupby("service")["is_anomaly"]
+    .agg(rows="size", rate="mean")
+    .sort_values("rate", ascending=False)
+)
+amount_by_label = anomaly_data.groupby("is_anomaly")["amount_usd"].median()
+fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+plot_rate_bars(
+    axes[0], anomaly_by_service, "Answer-key anomaly rate by service",
+    "Anomalous bookings (%)", "#7030A0",
+)
+labels = ["Normal", "Anomaly"]
+values = [amount_by_label.get(0, np.nan), amount_by_label.get(1, np.nan)]
+bars = axes[1].bar(labels, values, color=["#A5A5A5", "#7030A0"])
+axes[1].set_title("Median amount by answer-key label", weight="bold")
+axes[1].set_ylabel("Median booking amount (USD)")
+axes[1].grid(axis="y", alpha=0.25)
+for bar, value in zip(bars, values):
+    axes[1].annotate(
+        f"${value:,.0f}", (bar.get_x() + bar.get_width() / 2, bar.get_height()),
+        xytext=(0, 4), textcoords="offset points", ha="center", fontsize=9,
+    )
+fig.suptitle(
+    f"Objective 5 — Detect booking amount anomalies ({int(anomaly_data['is_anomaly'].sum()):,} labeled anomalies)",
+    fontsize=15, weight="bold",
+)
+fig.tight_layout()
+plt.show()
+
+print(
+    "Interpretation: segment differences are descriptive associations, not proof "
+    "of causation. Anomaly flags should be reviewed, not treated as confirmed errors."
+)
+```
+
+---
+
+## 19. Save Model, Scaler and Features
+
+Each objective is saved in its own folder so the app can load it without retraining:
+
+| File | What it holds |
+| --- | --- |
+| `model.joblib` | A dictionary with the full pipeline, the scaler and the feature details. The app loads this one |
+| `pipeline.joblib` | The complete fitted pipeline on its own |
+| `scaler.joblib` | The fitted numeric scaler |
+| `features.json` | The feature list, derived-feature rules and the selection metric, in readable form |
+
+The anomaly model also stores its peer reference tables (median and spread of log amounts for every service, class and region group), because its inputs depend on them.
+
+### Full code
+
+```python
+from pathlib import Path
+
+import json
+
+import joblib
+
+ARTIFACT_ROOT = Path("models") / "business_objectives"
+ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
+
+
+def fitted_numeric_scaler(pipeline):
+    preprocessor = pipeline.named_steps["preprocessor"]
+    numeric_pipeline = preprocessor.named_transformers_["numeric"]
+    return numeric_pipeline.named_steps["scaler"]
+
+
+def save_objective_artifacts(
+    objective_id,
+    pipeline,
+    scaler,
+    feature_spec,
+    extra_bundle=None,
+):
+    output_dir = ARTIFACT_ROOT / objective_id
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    bundle = {
+        "pipeline": pipeline,
+        "scaler": scaler,
+        "feature_spec": feature_spec,
+    }
+    if extra_bundle:
+        bundle.update(extra_bundle)
+
+    joblib.dump(bundle, output_dir / "model.joblib")
+    joblib.dump(pipeline, output_dir / "pipeline.joblib")
+    joblib.dump(scaler, output_dir / "scaler.joblib")
+
+    feature_metadata = {"feature_spec": feature_spec}
+    if extra_bundle:
+        feature_metadata.update(extra_bundle)
+    if "feature_reference" in feature_metadata:
+        feature_metadata["feature_reference"] = dict(feature_metadata["feature_reference"])
+    feature_reference = feature_metadata.get("feature_reference")
+    if feature_reference and "group_stats_lookup" in feature_reference:
+        feature_reference["group_stats_lookup"] = [
+            {"group_values": list(group_key), **stats}
+            for group_key, stats in feature_reference["group_stats_lookup"].items()
+        ]
+
+    def json_safe(value):
+        if isinstance(value, dict):
+            return {str(key): json_safe(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [json_safe(item) for item in value]
+        if isinstance(value, np.generic):
+            return json_safe(value.item())
+        if value is pd.NA or (isinstance(value, float) and not np.isfinite(value)):
+            return None
+        return value
+
+    with (output_dir / "features.json").open("w", encoding="utf-8") as feature_file:
+        json.dump(json_safe(feature_metadata), feature_file, indent=2, allow_nan=False)
+
+    print(f"Saved {objective_id} artifacts to {output_dir.resolve()}")
+
+
+objective_artifacts = [
+    (
+        "01_booking_cancellations",
+        trained_models["Logistic Regression"],
+        fitted_numeric_scaler(trained_models["Logistic Regression"]),
+        {
+            "objective": "Reduce booking cancellations",
+            "selected_model": "Logistic Regression",
+            "target": "cancelled (1 if booking_status is Cancelled/Canceled, else 0)",
+            "model_features": [
+                "advance_days", "advance_days_missing", "service_rating",
+                "cancellation_flexibility", "service_type", "client_tier",
+                "booking_channel", "policy_compliant",
+            ],
+            "numeric_features": [
+                "advance_days", "advance_days_missing", "service_rating",
+            ],
+            "categorical_features": [
+                "cancellation_flexibility", "service_type", "client_tier",
+                "booking_channel", "policy_compliant",
+            ],
+            "required_source_columns": [
+                "booking_date", "travel_date", "booking_status", "supplier_id",
+                "service_type", "client_id", "booking_channel", "policy_compliant",
+            ],
+            "required_lookups": {
+                "supplier_id": ["service_rating", "cancellation_flexibility"],
+                "client_id": ["client_tier"],
+            },
+            "derived_features": {
+                "advance_days": "Parsed travel_date minus booking_date; negative or invalid values become missing.",
+                "advance_days_missing": "1 when advance_days is missing, else 0.",
+            },
+            "selection_metric": "Highest held-out average precision among evaluated candidate models (0.253).",
+        },
+    ),
+    (
+        "02_trip_cost_forecasting",
+        regression_models["Hist Gradient Boosting Regressor"],
+        fitted_numeric_scaler(regression_models["Hist Gradient Boosting Regressor"]),
+        {
+            "objective": "Forecast trip cost",
+            "selected_model": "Hist Gradient Boosting Regressor",
+            "target": "log_amount_usd (invert predictions with exp to obtain USD)",
+            "model_features": list(regression_features),
+            "numeric_features": [
+                "international", "advance_days", "trip_length_days", "peak_season",
+            ],
+            "categorical_features": [
+                "service_type", "travel_class", "destination_region",
+            ],
+            "required_source_columns": [
+                "origin_city", "destination_city", "booking_date", "travel_date",
+                "return_date", "amount_usd", "service_type", "travel_class",
+            ],
+            "derived_features": {
+                "destination_region": "Mapped from normalized destination city using the notebook city-location map.",
+                "international": "1 when normalized origin and destination countries differ, else 0.",
+                "advance_days": "Corrected travel date minus booking date, in days; negative values become missing.",
+                "trip_length_days": "Corrected return date minus corrected travel date, in days; negative values become missing.",
+                "peak_season": "1 for travel months June, July, August, or December; otherwise 0.",
+            },
+            "selection_metric": "Lowest held-out MAE ($231.850); RMSE $1,012.344, R2 0.506, WAPE 0.184.",
+        },
+    ),
+    (
+        "03_policy_compliance",
+        policy_models["Logistic Regression"],
+        fitted_numeric_scaler(policy_models["Logistic Regression"]),
+        {
+            "objective": "Improve travel policy compliance",
+            "selected_model": "Logistic Regression",
+            "target": "out_of_policy (1 if policy_compliant is No, else 0)",
+            "model_features": list(policy_features),
+            "numeric_features": list(numeric_policy_features),
+            "categorical_features": list(categorical_policy_features),
+            "required_source_columns": [
+                "travel_class", "booking_date", "travel_date", "booking_channel",
+                "policy_compliant", "traveler_id", "supplier_id", "client_id",
+            ],
+            "required_lookups": {
+                "traveler_id": ["grade"],
+                "supplier_id": ["preferred_partner"],
+                "client_id": ["has_travel_policy"],
+            },
+            "derived_features": {
+                "advance_days": "Parsed travel_date minus booking_date; negative or invalid values become missing.",
+                "advance_days_missing": "1 when advance_days is missing, else 0.",
+                "traveler_grade": "Joined from the traveler dimension using traveler_id.",
+                "preferred_partner": "Joined from the supplier dimension using supplier_id.",
+                "has_travel_policy": "Joined from the client dimension using client_id.",
+            },
+            "selection_metric": "Highest held-out average precision (0.452); balanced accuracy 0.646, F1 0.488.",
+        },
+    ),
+    (
+        "04_customer_satisfaction",
+        satisfaction_models["Logistic Regression"],
+        fitted_numeric_scaler(satisfaction_models["Logistic Regression"]),
+        {
+            "objective": "Raise customer satisfaction",
+            "selected_model": "Logistic Regression",
+            "target": "dissatisfied (1 if valid csat_score <= 2, else 0)",
+            "model_features": list(satisfaction_features),
+            "numeric_features": list(numeric_satisfaction_features),
+            "categorical_features": list(categorical_satisfaction_features),
+            "required_source_columns": [
+                "resolution_hours", "first_response_hours", "escalated",
+                "category", "contact_channel", "ticket_id", "booking_id",
+                "client_id", "csat_score",
+            ],
+            "required_lookups": {
+                "booking_id": ["client_id"],
+                "client_id": ["client_tier"],
+            },
+            "derived_features": {
+                "client_id": "Use ticket client_id when present, otherwise fill from its booking.",
+                "client_tier": "Joined from the client dimension using resolved client_id.",
+                "dissatisfied": "1 for valid CSAT scores 1 or 2; 0 for scores 3 through 5.",
+            },
+            "selection_metric": "Highest held-out average precision (0.893); balanced accuracy 0.866, F1 0.786.",
+        },
+    ),
+    (
+        "05_booking_amount_anomalies",
+        anomaly_model,
+        anomaly_model.named_steps["scaler"],
+        {
+            "objective": "Detect booking amount anomalies",
+            "selected_model": "Isolation Forest (only anomaly model evaluated)",
+            "target": "Unsupervised anomaly score; answer key is for evaluation only.",
+            "model_features": list(X_anomaly_train.columns),
+            "numeric_features": list(X_anomaly_train.columns),
+            "categorical_features": [],
+            "required_source_columns": [
+                "service_type", "travel_class", "destination_city", "amount_usd",
+            ],
+            "derived_features": {
+                "destination_region": "Normalize destination city and map through the notebook city-region map.",
+                "peer_reference": "Training-only medians and MADs by service_type, travel_class, and destination_region; unseen or groups with fewer than 20 rows fall back to global training references.",
+                "model_features": list(X_anomaly_train.columns),
+            },
+            "selection_metric": "Only anomaly model evaluated; held-out average precision 0.678, ROC AUC 0.947, F1 0.634.",
+        },
+        {
+            "feature_reference": {
+                "city_regions": city_regions,
+                "group_columns": group_columns,
+                "group_stats_lookup": group_stats_lookup,
+                "global_log_median": float(global_log_median),
+                "global_log_mad": float(global_log_mad),
+                "minimum_group_count": 20,
+            },
+        },
+    ),
+]
+
+for objective_id, pipeline, scaler, feature_spec, *extra in objective_artifacts:
+    save_objective_artifacts(
+        objective_id,
+        pipeline,
+        scaler,
+        feature_spec,
+        extra_bundle=extra[0] if extra else None,
+    )
+
+print("Saved model bundles, pipelines, fitted scalers, and feature metadata for all objectives.")
+```
+
+---
+
+## 20. Download Model, Scaler and Features
+
+This cell zips each objective's files and shows a download link for every one of them. It checks that all four files exist first, and stops with a clear message if one is missing.
+
+### Full code
+
+```python
+from IPython.display import FileLink, HTML, display
+import zipfile
+
+artifact_names = ("model.joblib", "pipeline.joblib", "scaler.joblib", "features.json")
+
+for objective_id, *_ in objective_artifacts:
+    objective_dir = ARTIFACT_ROOT / objective_id
+    missing_artifacts = [
+        name for name in artifact_names if not (objective_dir / name).is_file()
+    ]
+    if missing_artifacts:
+        raise FileNotFoundError(
+            f"Missing artifacts for {objective_id}: {', '.join(missing_artifacts)}. "
+            "Run the artifact-saving cell first."
+        )
+
+    archive_path = ARTIFACT_ROOT / f"{objective_id}.zip"
+    with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name in artifact_names:
+            archive.write(objective_dir / name, arcname=f"{objective_id}/{name}")
+
+    display(HTML(f"<h4>{objective_id}</h4>"))
+    for name in artifact_names:
+        display(FileLink(str(objective_dir / name), result_html_prefix=f"{name}: "))
+    display(FileLink(str(archive_path), result_html_prefix="Download all: "))
+```
+
+### The Streamlit app
+
+The saved files power [`app.py`](app.py). It has a Home page and one page for each model: **Booking Cancellations, Trip Cost Forecast, Policy Compliance, Customer Satisfaction and Booking Amount Anomalies.**
+
+- **One booking or ticket:** fill in a short form and press Predict. The result shows the risk percentage, a High, Medium or Low tier, a suggested action and the main factors behind the score.
+- **Many rows:** download a CSV template, upload your filled file and download the scored results.
+- **Derived inputs** such as advance days, trip length, peak season and destination region are worked out by the app from the dates and cities.
+- Model features were checked against the notebook on the test rows, and the results matched.
+
+**Run it yourself**
+
+```bash
+pip install streamlit pandas numpy scikit-learn joblib
+python -m streamlit run app.py
+```
+
+Live app: [Open the Streamlit app](YOUR-STREAMLIT-LINK)
+
+<!-- Add a screenshot: <p align="center"><img src="images/app_screenshot.png" width="100%"></p> -->
+
+### Full code: app.py
+
+```python
+# =============================================================================
+# TRAVEL BUSINESS OPERATIONS PREDICTION SYSTEM  (Horizon Global Travel Management)
+# A Streamlit app that uses the five saved models from the notebook.
+#
+#   Page                      Business problem                        Model
+#   Booking Cancellations     Which bookings are likely to cancel?    Logistic Regression
+#   Trip Cost Forecast        What will this trip cost?               Hist Gradient Boosting
+#   Policy Compliance         Is this booking likely out of policy?   Logistic Regression
+#   Customer Satisfaction     Will this ticket end dissatisfied?      Logistic Regression
+#   Booking Amount Anomalies  Is this booking amount unusual?         Isolation Forest
+#
+# HOW TO RUN (VS Code terminal, inside the project folder):
+#   pip install streamlit pandas numpy scikit-learn joblib
+#   python -m streamlit run app.py
+#
+# FOLDER LAYOUT (the app finds the model files by itself):
+#   app.py
+#   models/business_objectives/01_booking_cancellations/model.joblib   (and the other 4 folders)
+# =============================================================================
+
+import itertools
+import re
+import unicodedata
+from pathlib import Path
+
+import joblib
+import numpy as np
+import pandas as pd
+import streamlit as st
+
+APP_TITLE = "Travel Business Operations Prediction System"
+APP_SUBTITLE = "Horizon Global Travel Management"
+
+st.set_page_config(page_title=APP_TITLE, page_icon="✈️", layout="wide")
+
+
+# -----------------------------------------------------------------------------
+# 1. SETTINGS YOU MAY WANT TO CHANGE
+# -----------------------------------------------------------------------------
+# Risk tiers: below the first number = Low, between = Medium, above the second = High.
+# The numbers come from checking each model on its held-out test rows.
+TIER_CUTS = (0.40, 0.60)
+
+# Typical size of the cost model's error on test data (WAPE 18.4%). Used for the planning range.
+COST_TYPICAL_ERROR = 0.184
+
+# Which travel classes belong to which service (taken from the booking data).
+CLASS_BY_SERVICE = {
+    "Flight": ["Economy", "Premium Economy", "Business", "First"],
+    "Hotel": ["Standard", "Superior", "Suite"],
+    "Car Rental": ["Economy", "SUV", "Luxury"],
+}
+
+# City -> (country, region). Same map the notebook used; codes and spellings are accepted too.
+CITY_INFO = {
+    "lagos": ("Nigeria", "Africa"), "los": ("Nigeria", "Africa"),
+    "london": ("United Kingdom", "Europe"), "lon": ("United Kingdom", "Europe"),
+    "new york": ("United States", "North America"), "nyc": ("United States", "North America"),
+    "dubai": ("United Arab Emirates", "Middle East"), "dxb": ("United Arab Emirates", "Middle East"),
+    "frankfurt": ("Germany", "Europe"), "fra": ("Germany", "Europe"),
+    "johannesburg": ("South Africa", "Africa"), "joburg": ("South Africa", "Africa"),
+    "jnb": ("South Africa", "Africa"),
+    "mumbai": ("India", "South Asia"), "bombay": ("India", "South Asia"),
+    "bom": ("India", "South Asia"),
+    "sao paulo": ("Brazil", "South America"), "gru": ("Brazil", "South America"),
+    "singapore": ("Singapore", "Southeast Asia"), "sin": ("Singapore", "Southeast Asia"),
+    "sydney": ("Australia", "Oceania"), "syd": ("Australia", "Oceania"),
+}
+CITY_CHOICES = ["Lagos", "London", "New York", "Dubai", "Frankfurt", "Johannesburg",
+                "Mumbai", "Sao Paulo", "Singapore", "Sydney"]
+
+YES_NO = ["Yes", "No"]
+
+
+# -----------------------------------------------------------------------------
+# 2. FINDING AND LOADING THE SAVED MODELS
+# -----------------------------------------------------------------------------
+ROOT = Path(__file__).resolve().parent
+
+
+def find_model_dir():
+    """Look for the models folder next to app.py."""
+    for candidate in (ROOT / "models" / "business_objectives", ROOT / "business_objectives", ROOT / "models"):
+        if (candidate / "01_booking_cancellations").is_dir():
+            return candidate
+    return None
+
+
+MODEL_DIR = find_model_dir()
+
+
+@st.cache_resource
+def load_bundle(folder):
+    """model.joblib holds a dictionary: the full pipeline, the scaler and the feature details."""
+    return joblib.load(MODEL_DIR / folder / "model.joblib")
+
+
+# -----------------------------------------------------------------------------
+# 3. SMALL HELPERS
+# -----------------------------------------------------------------------------
+SYNONYMS = {"y": "yes", "true": "yes", "1": "yes", "n": "no", "false": "no", "0": "no"}
+
+
+def key(value):
+    """Match spellings loosely: 'Semi-Flexible', 'semi flexible' and 'SEMI FLEXIBLE' all give 'semiflexible'."""
+    text = re.sub(r"[^a-z0-9]", "", str(value).lower())
+    return SYNONYMS.get(text, text)
+
+
+def normalize_text(value):
+    """Trim, collapse spaces and lower-case, like the notebook did."""
+    if pd.isna(value):
+        return "missing"
+    return re.sub(r"\s+", " ", str(value).strip()).casefold()
+
+
+def normalize_city(value):
+    if pd.isna(value):
+        return "missing"
+    text = str(value).strip().casefold().replace("�", "a")
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def parse_money(value):
+    """Turn '$1,250.50', 'USD 1,250.50' or '(300)' into a number."""
+    text = str(value).strip()
+    negative = text.startswith("(") and text.endswith(")")
+    text = re.sub(r"(?i)\bUSD\b", "", text)
+    text = re.sub(r"[$,()]", "", text)
+    text = re.sub(r"[^0-9.\-]", "", text)
+    number = pd.to_numeric(text, errors="coerce")
+    return -number if negative and pd.notna(number) else number
+
+
+def days_between(start, end):
+    """Whole days from start to end. Negative or unreadable dates become missing."""
+    start = pd.to_datetime(start, format="mixed", errors="coerce")
+    end = pd.to_datetime(end, format="mixed", errors="coerce")
+    days = (end - start).dt.days.astype("float64")
+    return days.where(days >= 0)
+
+
+def tier_of(probability):
+    low, high = TIER_CUTS
+    return "High" if probability >= high else "Medium" if probability >= low else "Low"
+
+
+def categories_of(pipeline):
+    """The exact category spellings the model saw in training, per column."""
+    pre = pipeline.named_steps["preprocessor"]
+    encoder = pre.named_transformers_["categorical"].named_steps["encoder"]
+    columns = pre.transformers_[1][2]
+    return dict(zip(columns, encoder.categories_))
+
+
+def options_for(bundle, column):
+    """Clean drop-down choices for a column, built from the model's own categories."""
+    groups = {}
+    for category in categories_of(bundle["pipeline"])[column]:
+        groups.setdefault(key(category), []).append(str(category))
+    labels = []
+    for variants in groups.values():
+        variants = sorted(variants)
+        mixed = [v for v in variants if v != v.upper() and v != v.lower()]
+        label = mixed[0] if mixed else variants[0].title()
+        labels.append("SUV" if label == "Suv" else label)
+    return sorted(labels)
+
+
+def expand(frame, categories):
+    """
+    The training data held several spellings of the same value (for example 'Phone',
+    'PHONE', 'phone'). The model treats each spelling as separate, so we score every
+    spelling and average the results. For clean columns this changes nothing.
+    """
+    spellings = {
+        column: {k: [c for c in cats if key(c) == k] for k in {key(c) for c in cats}}
+        for column, cats in categories.items()
+    }
+    rows, ids = [], []
+    for position, record in enumerate(frame.to_dict("records")):
+        choices = []
+        for column in frame.columns:
+            if column in spellings:
+                choices.append(spellings[column].get(key(record[column]), [record[column]]))
+            else:
+                choices.append([record[column]])
+        for combo in itertools.product(*choices):
+            rows.append(combo)
+            ids.append(position)
+    return pd.DataFrame(rows, columns=frame.columns), np.array(ids)
+
+
+def predict_probability(pipeline, features):
+    """Chance of the 'yes' outcome (cancelled, out of policy, dissatisfied) for every row."""
+    big, ids = expand(features, categories_of(pipeline))
+    probability = pipeline.predict_proba(big)[:, 1]
+    return pd.Series(probability).groupby(ids).mean().to_numpy()
+
+
+def main_factors(pipeline, features, top=3):
+    """For the linear models: which inputs push this one case up or down."""
+    pre = pipeline.named_steps["preprocessor"]
+    model = pipeline.named_steps["classifier"]
+    big, _ = expand(features.iloc[[0]], categories_of(pipeline))
+    contribution = pre.transform(big) * model.coef_[0]
+    contribution = np.asarray(contribution).mean(axis=0)
+    names = [n.split("__", 1)[1] for n in pre.get_feature_names_out()]
+    row = features.iloc[0]
+
+    merged = {}
+    for name, value in zip(names, contribution):
+        if name in row.index:                                   # numeric input
+            label = f"{name.replace('_', ' ')} = {row[name]}"
+        else:                                                   # one-hot category
+            column = next(c for c in row.index if name.startswith(c + "_"))
+            label = f"{column.replace('_', ' ')} = {row[column]}"
+        merged[label] = merged.get(label, 0) + value
+
+    ranked = sorted(merged.items(), key=lambda item: item[1])
+    up = [(n, v) for n, v in reversed(ranked) if v > 0.02][:top]
+    down = [(n, v) for n, v in ranked if v < -0.02][:top]
+    return up, down
+
+
+# -----------------------------------------------------------------------------
+# 4. PAGE 1 - BOOKING CANCELLATIONS
+# -----------------------------------------------------------------------------
+def form_cancellations(bundle):
+    c1, c2 = st.columns(2)
+    booking_date = c1.date_input("Booking date", pd.Timestamp.today(), key="c_bd")
+    travel_date = c2.date_input("Travel date", pd.Timestamp.today() + pd.Timedelta(days=18), key="c_td")
+    service = c1.selectbox("Service type", options_for(bundle, "service_type"), key="c_sv")
+    tier = c2.selectbox("Client tier", options_for(bundle, "client_tier"), key="c_tier")
+    rating = c1.slider("Supplier service rating (1 to 5)", 1.0, 5.0, 3.7, 0.1, key="c_rt")
+    flexibility = c2.selectbox("Cancellation flexibility", options_for(bundle, "cancellation_flexibility"), key="c_fx")
+    channel = c1.selectbox("Booking channel", options_for(bundle, "booking_channel"), key="c_ch")
+    policy = c2.selectbox("Booking within travel policy?", YES_NO, key="c_pol")
+    return pd.DataFrame([{
+        "booking_date": str(booking_date), "travel_date": str(travel_date),
+        "service_type": service, "client_tier": tier, "service_rating": rating,
+        "cancellation_flexibility": flexibility, "booking_channel": channel,
+        "policy_compliant": policy,
+    }])
+
+
+def features_cancellations(raw, bundle):
+    days = days_between(raw["booking_date"], raw["travel_date"])
+    return pd.DataFrame({
+        "advance_days": days,
+        "advance_days_missing": days.isna().astype(int),
+        "service_rating": pd.to_numeric(raw["service_rating"], errors="coerce"),
+        "cancellation_flexibility": raw["cancellation_flexibility"].astype(object),
+        "service_type": raw["service_type"].astype(object),
+        "client_tier": raw["client_tier"].astype(object),
+        "booking_channel": raw["booking_channel"].astype(object),
+        "policy_compliant": raw["policy_compliant"].astype(object),
+    })
+
+
+# -----------------------------------------------------------------------------
+# 5. PAGE 2 - TRIP COST FORECAST
+# -----------------------------------------------------------------------------
+def form_cost(bundle):
+    c1, c2 = st.columns(2)
+    service = c1.selectbox("Service type", list(CLASS_BY_SERVICE), key="k_sv")
+    travel_class = c2.selectbox("Travel class", CLASS_BY_SERVICE[service], key="k_cl")
+    origin = c1.selectbox("Origin city", CITY_CHOICES, index=0, key="k_or")
+    destination = c2.selectbox("Destination city", CITY_CHOICES, index=1, key="k_de")
+    booking_date = c1.date_input("Booking date", pd.Timestamp.today(), key="k_bd")
+    travel_date = c2.date_input("Travel date", pd.Timestamp.today() + pd.Timedelta(days=18), key="k_td")
+    return_date = c1.date_input("Return date", pd.Timestamp.today() + pd.Timedelta(days=23), key="k_rd")
+    return pd.DataFrame([{
+        "service_type": service, "travel_class": travel_class,
+        "origin_city": origin, "destination_city": destination,
+        "booking_date": str(booking_date), "travel_date": str(travel_date),
+        "return_date": str(return_date),
+    }])
+
+
+def features_cost(raw, bundle):
+    origin = raw["origin_city"].map(lambda c: CITY_INFO.get(normalize_city(c), (np.nan, np.nan)))
+    destination = raw["destination_city"].map(lambda c: CITY_INFO.get(normalize_city(c), (np.nan, np.nan)))
+    origin_country = origin.map(lambda x: x[0])
+    destination_country = destination.map(lambda x: x[0])
+    region = destination.map(lambda x: x[1])
+    international = (origin_country != destination_country).astype(float)
+    international = international.where(origin_country.notna() & destination_country.notna())
+
+    booking = pd.to_datetime(raw["booking_date"], format="mixed", errors="coerce")
+    travel = pd.to_datetime(raw["travel_date"], format="mixed", errors="coerce")
+    back = pd.to_datetime(raw["return_date"], format="mixed", errors="coerce")
+    swapped = travel.notna() & back.notna() & (back < travel)          # fix swapped dates
+    travel, back = travel.where(~swapped, back), back.where(~swapped, travel)
+
+    advance = (travel - booking).dt.days.astype("float64")
+    length = (back - travel).dt.days.astype("float64")
+    peak = travel.dt.month.isin([6, 7, 8, 12]).astype(float).where(travel.notna())
+    return pd.DataFrame({
+        "service_type": raw["service_type"].astype(object),
+        "travel_class": raw["travel_class"].astype(object),
+        "destination_region": region.astype(object),
+        "international": international,
+        "advance_days": advance.where(advance >= 0),
+        "trip_length_days": length.where(length >= 0),
+        "peak_season": peak,
+    })
+
+
+# -----------------------------------------------------------------------------
+# 6. PAGE 3 - POLICY COMPLIANCE
+# -----------------------------------------------------------------------------
+def form_policy(bundle):
+    c1, c2 = st.columns(2)
+    service = c1.selectbox("Service type", list(CLASS_BY_SERVICE), key="p_sv")
+    travel_class = c2.selectbox("Travel class", CLASS_BY_SERVICE[service], key="p_cl")
+    grade = c1.selectbox("Traveller grade", options_for(bundle, "traveler_grade"), key="p_gr")
+    channel = c2.selectbox("Booking channel", options_for(bundle, "booking_channel"), key="p_ch")
+    partner = c1.selectbox("Preferred partner supplier?", YES_NO, key="p_pp")
+    has_policy = c2.selectbox("Client has a travel policy?", YES_NO, key="p_hp")
+    booking_date = c1.date_input("Booking date", pd.Timestamp.today(), key="p_bd")
+    travel_date = c2.date_input("Travel date", pd.Timestamp.today() + pd.Timedelta(days=18), key="p_td")
+    return pd.DataFrame([{
+        "travel_class": travel_class, "traveler_grade": grade, "preferred_partner": partner,
+        "booking_channel": channel, "has_travel_policy": has_policy,
+        "booking_date": str(booking_date), "travel_date": str(travel_date),
+    }])
+
+
+def features_policy(raw, bundle):
+    days = days_between(raw["booking_date"], raw["travel_date"])
+    return pd.DataFrame({
+        "travel_class": raw["travel_class"].astype(object),
+        "traveler_grade": raw["traveler_grade"].astype(object),
+        "preferred_partner": raw["preferred_partner"].astype(object),
+        "advance_days": days,
+        "advance_days_missing": days.isna().astype(int),
+        "booking_channel": raw["booking_channel"].astype(object),
+        "has_travel_policy": raw["has_travel_policy"].astype(object),
+    })
+
+
+# -----------------------------------------------------------------------------
+# 7. PAGE 4 - CUSTOMER SATISFACTION
+# -----------------------------------------------------------------------------
+def form_satisfaction(bundle):
+    c1, c2 = st.columns(2)
+    category = c1.selectbox("Ticket category", options_for(bundle, "category"), key="s_ca")
+    channel = c2.selectbox("Contact channel", options_for(bundle, "contact_channel"), key="s_ch")
+    tier = c1.selectbox("Client tier", options_for(bundle, "client_tier"), key="s_ti")
+    escalated = c2.selectbox("Ticket escalated?", YES_NO, index=1, key="s_es")
+    first = c1.number_input("First response time (hours)", 0.0, 500.0, 2.0, 0.5, key="s_fr")
+    resolution = c2.number_input("Resolution time (hours)", 0.0, 2000.0, 18.0, 0.5, key="s_re")
+    return pd.DataFrame([{
+        "category": category, "contact_channel": channel, "client_tier": tier,
+        "escalated": escalated, "first_response_hours": first, "resolution_hours": resolution,
+    }])
+
+
+def features_satisfaction(raw, bundle):
+    return pd.DataFrame({
+        "resolution_hours": pd.to_numeric(raw["resolution_hours"], errors="coerce"),
+        "first_response_hours": pd.to_numeric(raw["first_response_hours"], errors="coerce"),
+        "escalated": raw["escalated"].astype(object),
+        "category": raw["category"].astype(object),
+        "contact_channel": raw["contact_channel"].astype(object),
+        "client_tier": raw["client_tier"].astype(object),
+    })
+
+
+# -----------------------------------------------------------------------------
+# 8. PAGE 5 - BOOKING AMOUNT ANOMALIES
+# -----------------------------------------------------------------------------
+def form_anomaly(bundle):
+    c1, c2 = st.columns(2)
+    service = c1.selectbox("Service type", list(CLASS_BY_SERVICE), key="a_sv")
+    travel_class = c2.selectbox("Travel class", CLASS_BY_SERVICE[service], key="a_cl")
+    city = c1.selectbox("Destination city", CITY_CHOICES, key="a_ci")
+    amount = c2.number_input("Booking amount (USD)", 0.0, 1_000_000.0, 850.0, 10.0, key="a_am")
+    return pd.DataFrame([{
+        "service_type": service, "travel_class": travel_class,
+        "destination_city": city, "amount_usd": amount,
+    }])
+
+
+def features_anomaly(raw, bundle):
+    """Same five features the Isolation Forest was trained on."""
+    ref = bundle["feature_reference"]
+    lookup = ref["group_stats_lookup"]
+    amount = raw["amount_usd"].map(parse_money).astype(float)
+    log_amount = np.log(amount.where(amount > 0))
+
+    service = raw["service_type"].map(normalize_text)
+    travel_class = raw["travel_class"].map(normalize_text)
+    region = raw["destination_city"].map(lambda c: CITY_INFO.get(normalize_city(c), (None, None))[1])
+
+    medians, mads = [], []
+    for group in zip(service, travel_class, region):
+        stats = lookup.get(group)
+        if stats is None or stats["group_count"] < ref["minimum_group_count"]:
+            medians.append(ref["global_log_median"])                 # unseen or small group
+            mads.append(ref["global_log_mad"])
+        else:
+            medians.append(stats["group_median"])
+            mad = stats["group_mad"]
+            mads.append(ref["global_log_mad"] if pd.isna(mad) or mad <= 0 else mad)
+
+    deviation = log_amount.to_numpy() - np.asarray(medians, dtype=float)
+    scale = np.maximum(1.4826 * np.asarray(mads, dtype=float), 0.05)
+    features = pd.DataFrame({
+        "log_amount_abs": np.log1p(amount.abs()).to_numpy(),
+        "log_amount_deviation": deviation,
+        "robust_peer_deviation": np.abs(deviation) / scale,
+        "amount_nonpositive": (amount.notna() & amount.le(0)).astype(int).to_numpy(),
+        "amount_missing": amount.isna().astype(int).to_numpy(),
+    })
+    features.attrs["typical_usd"] = np.exp(np.asarray(medians, dtype=float))
+    return features
+
+
+# -----------------------------------------------------------------------------
+# 9. PAGE SETTINGS: ONE ENTRY PER PAGE
+# -----------------------------------------------------------------------------
+PAGES = {
+    "Booking Cancellations": {
+        "folder": "01_booking_cancellations", "kind": "risk",
+        "question": "How likely is this booking to be cancelled?",
+        "form": form_cancellations, "features": features_cancellations,
+        "note": "Use the score to decide whom to contact first. About 1 in 6 bookings cancel, "
+                "and many flagged bookings will not, so keep any follow-up low-cost.",
+        "actions": {
+            "High": "Contact the traveller early, confirm the plans and offer a flexible change.",
+            "Medium": "Send a reminder and keep the booking on a watch list.",
+            "Low": "No extra action needed.",
+        },
+        "template": pd.DataFrame([{
+            "booking_date": "2026-03-01", "travel_date": "2026-03-20", "service_type": "Flight",
+            "client_tier": "Gold", "service_rating": 3.8, "cancellation_flexibility": "Semi Flexible",
+            "booking_channel": "Online Tool", "policy_compliant": "Yes"}]),
+    },
+    "Trip Cost Forecast": {
+        "folder": "02_trip_cost_forecasting", "kind": "cost",
+        "question": "What is this trip likely to cost?",
+        "form": form_cost, "features": features_cost,
+        "note": "Treat the result as a planning guide, not a quote. Typical error on test data was "
+                "about 18%, and a few large bookings are harder to predict.",
+        "template": pd.DataFrame([{
+            "service_type": "Flight", "travel_class": "Business", "origin_city": "Lagos",
+            "destination_city": "London", "booking_date": "2026-03-01",
+            "travel_date": "2026-03-20", "return_date": "2026-03-27"}]),
+    },
+    "Policy Compliance": {
+        "folder": "03_policy_compliance", "kind": "risk",
+        "question": "How likely is this booking to be out of policy?",
+        "form": form_policy, "features": features_policy,
+        "note": "Use the score to decide which bookings to review first. It is a review signal, "
+                "not a final compliance decision.",
+        "actions": {
+            "High": "Review before ticketing and ask for approver sign-off or an in-policy alternative.",
+            "Medium": "Check the booking against the client's travel policy.",
+            "Low": "Likely in policy. Normal approval flow.",
+        },
+        "template": pd.DataFrame([{
+            "travel_class": "Business", "traveler_grade": "Manager", "preferred_partner": "Yes",
+            "booking_channel": "Phone", "has_travel_policy": "Yes",
+            "booking_date": "2026-03-01", "travel_date": "2026-03-20"}]),
+    },
+    "Customer Satisfaction": {
+        "folder": "04_customer_satisfaction", "kind": "risk",
+        "question": "How likely is this support ticket to end with a dissatisfied customer?",
+        "form": form_satisfaction, "features": features_satisfaction,
+        "note": "Resolution time and escalation are only known near the end of a ticket, so this "
+                "page works best for closing or reviewing tickets. Use it to prioritise follow-up, never to reduce support.",
+        "actions": {
+            "High": "Follow up personally the same day and offer a fix or goodwill gesture.",
+            "Medium": "Check progress and send the customer an update.",
+            "Low": "Standard handling.",
+        },
+        "template": pd.DataFrame([{
+            "category": "Complaint", "contact_channel": "Phone", "client_tier": "Gold",
+            "escalated": "Yes", "first_response_hours": 3.5, "resolution_hours": 40}]),
+    },
+    "Booking Amount Anomalies": {
+        "folder": "05_booking_amount_anomalies", "kind": "anomaly",
+        "question": "Is this booking amount unusual compared with similar bookings?",
+        "form": form_anomaly, "features": features_anomaly,
+        "note": "A flag means 'unusual', not 'wrong'. Check each flagged booking against the supplier "
+                "invoice before taking action.",
+        "actions": {
+            "High": "Flagged. Check the invoice and booking record against the supplier before payment.",
+            "Medium": "Borderline. Spot-check if time allows.",
+            "Low": "Amount looks normal for similar bookings.",
+        },
+        "template": pd.DataFrame([{
+            "service_type": "Flight", "travel_class": "Economy",
+            "destination_city": "Dubai", "amount_usd": 14500}]),
+    },
+}
+
+
+# -----------------------------------------------------------------------------
+# 10. SCORING: TURN RAW INPUTS INTO A RESULTS TABLE
+# -----------------------------------------------------------------------------
+def score(cfg, raw, bundle):
+    raw = raw.reset_index(drop=True)
+    features = cfg["features"](raw, bundle)
+    out = raw.copy()
+    pipeline = bundle["pipeline"]
+
+    if cfg["kind"] == "risk":
+        probability = predict_probability(pipeline, features)
+        out["risk_percent"] = (probability * 100).round(1)
+        out["risk_tier"] = [tier_of(p) for p in probability]
+
+    elif cfg["kind"] == "cost":
+        big, ids = expand(features, categories_of(pipeline))
+        log_cost = pd.Series(pipeline.predict(big)).groupby(ids).mean().to_numpy()
+        cost = np.exp(log_cost)
+        out["predicted_cost_usd"] = cost.round(2)
+        out["planning_low_usd"] = (cost * (1 - COST_TYPICAL_ERROR)).round(2)
+        out["planning_high_usd"] = (cost * (1 + COST_TYPICAL_ERROR)).round(2)
+
+    else:  # anomaly
+        flagged = pipeline.predict(features) == -1
+        anomaly_score = -pipeline.decision_function(features)
+        out["anomaly_score"] = np.round(anomaly_score, 3)
+        out["typical_amount_usd"] = np.round(features.attrs["typical_usd"], 2)
+        out["flag"] = np.where(flagged, "Anomaly - review", "Normal")
+        out["risk_tier"] = ["High" if f else "Medium" if s > -0.08 else "Low"
+                            for f, s in zip(flagged, anomaly_score)]
+    return out, features
+
+
+def show_tier(tier, text):
+    box = {"High": st.error, "Medium": st.warning, "Low": st.success}[tier]
+    box(f"**{tier}**  -  {text}")
+
+
+# -----------------------------------------------------------------------------
+# 11. SHOWING A PAGE
+# -----------------------------------------------------------------------------
+def show_single_result(name, cfg, results, features, bundle):
+    row = results.iloc[0]
+    if cfg["kind"] == "risk":
+        st.metric("Chance of this outcome", f"{row['risk_percent']:.1f}%")
+        show_tier(row["risk_tier"], cfg["actions"][row["risk_tier"]])
+        up, down = main_factors(bundle["pipeline"], features)
+        left, right = st.columns(2)
+        left.markdown("**Pushing the risk up**")
+        for label, _ in up or [("Nothing stands out", 0)]:
+            left.write(f"- {label}")
+        right.markdown("**Pulling the risk down**")
+        for label, _ in down or [("Nothing stands out", 0)]:
+            right.write(f"- {label}")
+
+    elif cfg["kind"] == "cost":
+        st.metric("Estimated trip cost", f"${row['predicted_cost_usd']:,.0f}")
+        st.info(f"Planning range: ${row['planning_low_usd']:,.0f} to ${row['planning_high_usd']:,.0f} "
+                f"(typical error about {COST_TYPICAL_ERROR:.0%}).")
+
+    else:
+        c1, c2 = st.columns(2)
+        c1.metric("Entered amount", f"${float(parse_money(row['amount_usd'])):,.0f}")
+        c2.metric("Typical for similar bookings", f"${row['typical_amount_usd']:,.0f}")
+        show_tier(row["risk_tier"], cfg["actions"][row["risk_tier"]])
+
+
+def show_batch(name, cfg, bundle):
+    st.write("1. Download the template, 2. fill in your bookings, 3. upload it to score every row.")
+    template = cfg["template"]
+    st.download_button("Download CSV template", template.to_csv(index=False),
+                       file_name=f"{name.lower().replace(' ', '_')}_template.csv", key=f"tpl_{name}")
+    upload = st.file_uploader("Upload your CSV", type="csv", key=f"up_{name}")
+    if upload is None:
+        return
+    data = pd.read_csv(upload)
+    missing = [c for c in template.columns if c not in data.columns]
+    if missing:
+        st.error("Your file is missing these columns: " + ", ".join(missing))
+        return
+    results, _ = score(cfg, data[list(template.columns)], bundle)
+    st.dataframe(results)
+    if "risk_tier" in results:
+        st.bar_chart(results["risk_tier"].value_counts().reindex(["High", "Medium", "Low"], fill_value=0))
+    st.download_button("Download scored results", results.to_csv(index=False),
+                       file_name=f"{name.lower().replace(' ', '_')}_scored.csv", key=f"dl_{name}")
+
+
+def show_page(name):
+    cfg = PAGES[name]
+    bundle = load_bundle(cfg["folder"])
+    st.header(name)
+    st.write(cfg["question"])
+    st.caption(cfg["note"])
+
+    single, batch = st.tabs(["Single prediction", "Many bookings (CSV)"])
+    with single:
+        raw = cfg["form"](bundle)
+        if st.button("Predict", key=f"go_{name}"):
+            results, features = score(cfg, raw, bundle)
+            show_single_result(name, cfg, results, features, bundle)
+    with batch:
+        show_batch(name, cfg, bundle)
+
+
+# -----------------------------------------------------------------------------
+# 12. HOME PAGE
+# -----------------------------------------------------------------------------
+def show_home():
+    st.title(APP_TITLE)
+    st.subheader(APP_SUBTITLE)
+    st.write("Five models help the operations team decide where to look first. "
+             "Pick a page on the left, enter a booking or ticket, and press Predict. "
+             "Or upload a CSV to score many at once.")
+
+    summary = pd.DataFrame([
+        ["Booking Cancellations", "Which bookings may cancel?", "Logistic Regression",
+         "ROC AUC 0.63. Catches 59% of cancellations"],
+        ["Trip Cost Forecast", "What will a trip cost?", "Hist Gradient Boosting",
+         "Average error about $232 per booking (18%)"],
+        ["Policy Compliance", "Which bookings may break policy?", "Logistic Regression",
+         "ROC AUC 0.68. Catches 62% of out-of-policy bookings"],
+        ["Customer Satisfaction", "Which tickets may end badly?", "Logistic Regression",
+         "ROC AUC 0.95. Catches 85% of dissatisfied customers"],
+        ["Booking Amount Anomalies", "Which amounts look unusual?", "Isolation Forest",
+         "ROC AUC 0.95. Catches 72% of anomalies"],
+    ], columns=["Page", "Business question", "Model", "Result on unseen data"])
+    st.table(summary)
+
+    st.info("These models support decisions; they do not replace people. Use the result to decide "
+            "where to look first, and keep a person in the loop for every flagged case.")
+    st.caption(f"Model files loaded from: {MODEL_DIR}")
+
+
+# -----------------------------------------------------------------------------
+# 13. MAIN: SIDEBAR MENU
+# -----------------------------------------------------------------------------
+if MODEL_DIR is None:
+    st.error("Model files not found. Put the 'models' folder (with business_objectives inside) "
+             "in the same folder as app.py.")
+    st.stop()
+
+st.sidebar.title(APP_TITLE)
+choice = st.sidebar.radio("Go to", ["Home"] + list(PAGES))
+
+if choice == "Home":
+    show_home()
+else:
+    show_page(choice)
+```
+
+---
+
+## 21. Key Findings and Insights
+
+| # | Objective | Result on unseen data | What it means |
+| --- | --- | --- | --- |
+| 1 | Cancellations | ROC AUC 0.63, recall 59%, precision 24.5% | Weak but usable for ranking, not for certain calls |
+| 2 | Trip cost | Error $232 (18.4%), R-squared 0.51 | Good for planning ranges |
+| 3 | Policy compliance | ROC AUC 0.68, recall 62%, precision 40% | A review-order signal |
+| 4 | Satisfaction | ROC AUC 0.95, recall 85%, precision 73% | Strongest model |
+| 5 | Anomalies | 13 of 18 found, 10 false alarms | Good first filter |
+
+- **Data quality.** After cleaning there are 6,000 bookings and 2,500 tickets, and 2,430 tickets carry a usable satisfaction label. 70 were dropped because they had no valid score.
+- **Complaints drive dissatisfaction.** 56.2% of complaint tickets end dissatisfied, compared with 27.6% overall. Chat tickets are the best handled at 9.4%.
+- **Response speed shows up.** Satisfied customers waited a median of 1.3 hours for a first reply, dissatisfied ones 6.0 hours.
+- **Premium cabins and phone bookings break policy most.** First class 43.7%, suites 41.0%, phone 34.3%, against 20.6% for the online tool.
+- **Scores rank risk well even when accuracy looks modest.** On test data, tickets scored under 40% were dissatisfied 4% of the time and tickets scored over 70% were dissatisfied 80% of the time. For policy, under 40% means 16% out of policy and over 70% means 58%. For cancellations, under 40% means 10% cancel and over 70% means 32%.
+- **A simple model won three of four supervised objectives.** Logistic Regression beat Random Forest and Hist Gradient Boosting on cancellations, policy and satisfaction. Extra complexity did not help.
+- **Anomalies are about distance from peers.** The model compares each amount with similar bookings, which is why a $4,688 median for anomalies stands out against $929.
+
+**Limits to keep in mind**
+
+- Cancellation and policy models have modest discrimination. Many flagged bookings will not turn out to be problems.
+- The satisfaction model uses resolution time and escalation, which are known late in a ticket's life.
+- Each result comes from one 80/20 split, and the anomaly test set has only 18 anomalies.
+- The data is synthetic, so the results show the method, not the performance of a real company.
+
+---
+
+## 22. Recommendations
+
+1. **Start with satisfaction triage.** It is the strongest model. Score tickets as they close, give High-tier tickets a same-day follow-up call and treat the score as a prompt for human help, never a reason to reduce support. Look at complaints first, since more than half end badly.
+2. **Move more customers to chat.** Chat tickets end dissatisfied only 9.4% of the time. Test whether routing suitable requests to chat holds that result before assuming it will.
+3. **Reply faster.** Dissatisfied customers waited about 4.7 hours longer for a first reply. Set a first-response target and track it.
+4. **Pilot cancellation outreach cheaply.** With 24.5% precision, only low-cost, reversible steps make sense, such as a reminder or a flexible-change offer. Compare against a control group to prove it works before scaling.
+5. **Review bookings for policy by tier.** Check High-tier bookings before ticketing, especially phone and travel-agent bookings and premium classes. Verify against the client's actual policy, since the score is only a signal.
+6. **Use cost estimates as ranges.** Quote clients the planning range (about plus or minus 18%), and review large bookings by hand because the model is least reliable on them.
+7. **Send flagged amounts to billing review.** Check each against the supplier invoice before payment. A flag means unusual, not wrong. Record which flags are confirmed so the threshold can be tuned.
+8. **Roll out in shadow mode, then monitor.** Run alongside current processes, track false alarms, missed cases and drift every month, and retrain on fresh data. Keep a person in the loop for every flagged case.
+
+---
+
+## 23. Conclusion
+
+This project took five travel-management problems from raw, messy tables to a working prediction app. Raw data was audited, cleaned and joined; features were built; at least three models were compared on each supervised objective; the best of each was confirmed on unseen data and saved with its scaler and features. Logistic Regression won cancellations, policy compliance and satisfaction, Hist Gradient Boosting won trip cost, and Isolation Forest handled anomalies.
+
+The models are decision support. Satisfaction is ready for a first pilot. Cancellation and policy scores should only rank where to look first. Cost estimates are planning ranges, and anomaly flags are prompts for a human check. The next steps are to replace the synthetic data with live bookings, pilot each tier next to current practice, measure the difference and retrain as the business changes.
+
+---
+
+**Author:** Adewale Oshinukan | Data Scientist | [GitHub](YOUR-GITHUB-LINK) | [Live App](YOUR-STREAMLIT-LINK)
