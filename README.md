@@ -4855,6 +4855,50 @@ except Exception as error:      # show any problem on the page instead of a blan
 
 ---
 
+## 23. Impact
+
+These results show where the models can help, but they do **not** prove realised savings or better service. Every figure below comes from held-out test data. Real impact has to be confirmed in a monitored pilot.
+
+### What the models can do for the business
+
+| Area | Model | What the test results say | How to use it |
+|---|---|---|---|
+| Customer experience | Logistic Regression (satisfaction) | Balanced accuracy **0.866**, ROC AUC **0.945**, F1 **0.786**. Precision **0.731** and recall **0.851**: about 73 of every 100 tickets it flags are truly dissatisfied, and it finds about 85 of every 100 dissatisfied tickets | Rank tickets so staff follow up on the riskiest first. This is the strongest candidate for a first pilot |
+| Cancellations | Logistic Regression | Recall **0.590**, precision **0.245**, ROC AUC **0.633** against a **17.1%** cancellation rate. It finds about 6 in 10 cancellations, but roughly 3 in 4 flagged bookings will not cancel | Low-cost, reversible outreach only. Set the threshold to fit team capacity |
+| Policy compliance | Logistic Regression | Recall **0.622**, precision **0.401**, balanced accuracy **0.646** | Order the review queue. Never use a score to penalise a traveller |
+| Billing anomalies | Isolation Forest | On 1,200 held-out bookings (18 true anomalies) it flagged **23**. About **13** were real (precision **0.565**) and it caught **72.2%** of the anomalies, missing about 5 (ROC AUC **0.947**) | Verify every flag against source records. A flag marks an unusual booking, not confirmed error or fraud |
+| Trip-cost planning | Hist Gradient Boosting | MAE about **$231.85**, WAPE **18.4%**, R² **0.506**, RMSE about **$1,012** | Use as a planning range, not a quote. Review large misses before committing to a price |
+
+### Customer experience
+
+**27.6%** of labelled tickets ended in dissatisfaction, rising to **56.2%** for complaints and falling to **9.4%** for chat. The satisfaction model is accurate enough to put the riskiest tickets at the front of the queue. These are patterns in the data. They do not prove that earlier follow-up will reduce dissatisfaction, so the pilot must compare results with the current process.
+
+### Operational efficiency and risk control
+
+Cancellation, policy and anomaly scores can order the work in human-review queues. Their precision (**0.245**, **0.401** and **0.565**) means some flagged cases will be false alarms, so scores should never trigger automatic penalties or customer-facing actions. Any efficiency gain depends on saving staff time without missing more cases or treating groups of customers unfairly.
+
+### Planning and cost management
+
+The cost model is typically off by about **$232** per booking (**18.4%** of booking value), but a few bookings are missed by much more, which is why RMSE (about **$1,012**) is far above MAE. Treat the output as guidance and not as a guaranteed price or a saving.
+
+### How to measure the impact
+
+Start with a limited support-triage pilot and compare it against the current process or a control group.
+
+| What to track | Why |
+|---|---|
+| Time to first response and to resolution | Shows whether prioritised tickets are handled faster |
+| Dissatisfaction after follow-up | The main customer-experience outcome |
+| Staff review time per flag | Shows whether the queues save time or add work |
+| Confirmed vs unconfirmed flags, and missed cases | Tests precision and recall in real use |
+| Cost-forecast error | Confirms the MAE and WAPE hold on new bookings |
+| Results across customer groups | Catches unfair outcomes early |
+| Intervention cost, and any recovered or avoided cost | Needed before claiming any financial benefit |
+
+Expand only if the measured improvements justify the extra workload and risk.
+
+---
+
 ## 23. Conclusion
 
 This project took five travel-management problems from raw, messy tables to a working prediction app. Raw data was audited, cleaned and joined; features were built; at least three models were compared on each supervised objective; the best of each was confirmed on unseen data and saved with its scaler and features. Logistic Regression won cancellations, policy compliance and satisfaction, Hist Gradient Boosting won trip cost, and Isolation Forest handled anomalies.
