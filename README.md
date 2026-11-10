@@ -1,6 +1,6 @@
 # Horizon Global Travel Management: Predictive Decision Support System
 
-### TRAVEL Management Operations Prediction System
+### Travel Management Operations Prediction System
 
 <p align="left">
 <img src="https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white" alt="Python">
