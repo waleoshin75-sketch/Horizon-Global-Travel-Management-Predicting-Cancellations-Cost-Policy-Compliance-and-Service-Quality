@@ -45,7 +45,8 @@ A corporate travel team deals with the same five problems every week: bookings t
 20. [Download Model, Scaler and Features](#20-download-model-scaler-and-features)
 21. [Key Findings and Insights](#21-key-findings-and-insights)
 22. [Recommendations](#22-recommendations)
-23. [Conclusion](#23-conclusion)
+23. [Impact](#-23impact)
+24. [Conclusion](#24-conclusion)
 
 ---
 
@@ -4899,7 +4900,7 @@ Expand only if the measured improvements justify the extra workload and risk.
 
 ---
 
-## 23. Conclusion
+## 24. Conclusion
 
 This project took five travel-management problems from raw, messy tables to a working prediction app. Raw data was audited, cleaned and joined; features were built; at least three models were compared on each supervised objective; the best of each was confirmed on unseen data and saved with its scaler and features. Logistic Regression won cancellations, policy compliance and satisfaction, Hist Gradient Boosting won trip cost, and Isolation Forest handled anomalies.
 
