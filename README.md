@@ -1,6 +1,7 @@
 # Horizon Global Travel Management: Predictive Decision Support System
 
 ### Travel Management Operations Prediction System
+**Predictive Analytics Engine for Real Time Optimization of Booking Patterns, Estimation of Travel Costs, and Compliance with Policies**
 
 <p align="left">
 <img src="https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white" alt="Python">
